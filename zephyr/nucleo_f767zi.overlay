@@ -1,0 +1,174 @@
+// STM32 Nucleo F767ZI device tree overlay for chess robot
+// GPIO matrix scanning, TB6600 stepper motor control, and peripherals
+
+&gpioa {
+    status = "okay";
+};
+
+&gpiob {
+    status = "okay";
+};
+
+&gpioc {
+    status = "okay";
+};
+
+&gpiod {
+    status = "okay";
+};
+
+&gpioe {
+    status = "okay";
+};
+
+&gpiof {
+    status = "okay";
+};
+
+&gpiog {
+    status = "okay";
+};
+
+// Enable UART for debugging
+&usart3 {
+    status = "okay";
+    current-speed = <115200>;
+};
+
+// Enable I2C for potential sensors
+&i2c1 {
+    status = "okay";
+    clock-frequency = <I2C_BITRATE_FAST>;
+};
+
+// Enable SPI for potential expansion
+&spi1 {
+    status = "okay";
+};
+
+// Enable Ethernet for MQTT communication
+&mac {
+    status = "okay";
+};
+
+// Custom GPIO aliases for chess robot hardware
+/ {
+    aliases {
+        // GPIO Matrix scanning pins
+        matrix-row0 = &gpiob 0;
+        matrix-row1 = &gpiob 1;
+        matrix-row2 = &gpiob 2;
+        matrix-row3 = &gpiob 3;
+        matrix-row4 = &gpiob 4;
+        matrix-row5 = &gpiob 5;
+        matrix-row6 = &gpiob 6;
+        matrix-row7 = &gpiob 7;
+        
+        matrix-col0 = &gpioc 0;
+        matrix-col1 = &gpioc 1;
+        matrix-col2 = &gpioc 2;
+        matrix-col3 = &gpioc 3;
+        matrix-col4 = &gpioc 4;
+        matrix-col5 = &gpioc 5;
+        matrix-col6 = &gpioc 6;
+        matrix-col7 = &gpioc 7;
+        
+        // X-Axis stepper motor (TB6600)
+        stepper-x-step = &gpiod 0;
+        stepper-x-dir = &gpiod 1;
+        stepper-x-en = &gpiod 2;
+        stepper-x-limit = &gpiod 3;
+        
+        // Y-Axis stepper motor (TB6600)
+        stepper-y-step = &gpiod 4;
+        stepper-y-dir = &gpiod 5;
+        stepper-y-en = &gpiod 6;
+        stepper-y-limit = &gpiod 7;
+        
+        // Z-Axis stepper motor (TB6600)
+        stepper-z-step = &gpioe 0;
+        stepper-z-dir = &gpioe 1;
+        stepper-z-en = &gpioe 2;
+        stepper-z-limit = &gpioe 3;
+        
+        // Emergency stop and safety
+        emergency-stop = &gpioe 4;
+        
+        // Status LEDs
+        led-red = &gpiof 0;
+        led-green = &gpiof 1;
+        led-blue = &gpiof 2;
+        
+        // Electromagnet control
+        electromagnet = &gpioe 5;
+    };
+    
+    // Custom nodes for chess robot components
+    chess-robot {
+        compatible = "chess-robot";
+        
+        gpio-matrix {
+            compatible = "gpio-matrix-8x8";
+            row-gpios = <&gpiob 0 GPIO_ACTIVE_HIGH>,
+                       <&gpiob 1 GPIO_ACTIVE_HIGH>,
+                       <&gpiob 2 GPIO_ACTIVE_HIGH>,
+                       <&gpiob 3 GPIO_ACTIVE_HIGH>,
+                       <&gpiob 4 GPIO_ACTIVE_HIGH>,
+                       <&gpiob 5 GPIO_ACTIVE_HIGH>,
+                       <&gpiob 6 GPIO_ACTIVE_HIGH>,
+                       <&gpiob 7 GPIO_ACTIVE_HIGH>;
+            
+            col-gpios = <&gpioc 0 GPIO_ACTIVE_HIGH>,
+                       <&gpioc 1 GPIO_ACTIVE_HIGH>,
+                       <&gpioc 2 GPIO_ACTIVE_HIGH>,
+                       <&gpioc 3 GPIO_ACTIVE_HIGH>,
+                       <&gpioc 4 GPIO_ACTIVE_HIGH>,
+                       <&gpioc 5 GPIO_ACTIVE_HIGH>,
+                       <&gpioc 6 GPIO_ACTIVE_HIGH>,
+                       <&gpioc 7 GPIO_ACTIVE_HIGH>;
+            
+            debounce-ms = <50>;
+            scan-interval-ms = <10>;
+        };
+        
+        stepper-motors {
+            compatible = "tb6600-steppers";
+            
+            x-axis {
+                step-gpio = <&gpiod 0 GPIO_ACTIVE_HIGH>;
+                dir-gpio = <&gpiod 1 GPIO_ACTIVE_HIGH>;
+                enable-gpio = <&gpiod 2 GPIO_ACTIVE_LOW>;
+                limit-gpio = <&gpiod 3 GPIO_ACTIVE_LOW>;
+                steps-per-mm = <80>;
+                max-feed-rate-mm-s = <100>;
+                travel-limit-mm = <250>;
+            };
+            
+            y-axis {
+                step-gpio = <&gpiod 4 GPIO_ACTIVE_HIGH>;
+                dir-gpio = <&gpiod 5 GPIO_ACTIVE_HIGH>;
+                enable-gpio = <&gpiod 6 GPIO_ACTIVE_LOW>;
+                limit-gpio = <&gpiod 7 GPIO_ACTIVE_LOW>;
+                steps-per-mm = <80>;
+                max-feed-rate-mm-s = <100>;
+                travel-limit-mm = <250>;
+            };
+            
+            z-axis {
+                step-gpio = <&gpioe 0 GPIO_ACTIVE_HIGH>;
+                dir-gpio = <&gpioe 1 GPIO_ACTIVE_HIGH>;
+                enable-gpio = <&gpioe 2 GPIO_ACTIVE_LOW>;
+                limit-gpio = <&gpioe 3 GPIO_ACTIVE_LOW>;
+                steps-per-mm = <400>;
+                max-feed-rate-mm-s = <50>;
+                travel-limit-mm = <50>;
+            };
+        };
+        
+        chess-parameters {
+            board-size-mm = <200>;
+            square-size-mm = <25>;
+            safe-height-mm = <10>;
+        };
+    };
+};

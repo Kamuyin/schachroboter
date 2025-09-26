@@ -1,0 +1,55 @@
+/*
+ * Device tree overlay for chess robot project
+ * Board: STM32 Nucleo F767ZI
+ */
+
+/ {
+	matrix0: gpio_matrix {
+		compatible = "gpio-matrix";
+		label = "MATRIX0";
+		
+		// Example GPIO assignments - adjust according to your actual wiring
+		// These are placeholders using available GPIO pins on the Nucleo board
+		row-gpios = <&gpiob 0 GPIO_ACTIVE_HIGH>,
+		            <&gpiob 1 GPIO_ACTIVE_HIGH>,
+		            <&gpiob 2 GPIO_ACTIVE_HIGH>,
+		            <&gpiob 3 GPIO_ACTIVE_HIGH>,
+		            <&gpiob 4 GPIO_ACTIVE_HIGH>,
+		            <&gpiob 5 GPIO_ACTIVE_HIGH>,
+		            <&gpiob 6 GPIO_ACTIVE_HIGH>,
+		            <&gpiob 7 GPIO_ACTIVE_HIGH>;
+		            
+		col-gpios = <&gpioc 0 GPIO_ACTIVE_HIGH>,
+		            <&gpioc 1 GPIO_ACTIVE_HIGH>,
+		            <&gpioc 2 GPIO_ACTIVE_HIGH>,
+		            <&gpioc 3 GPIO_ACTIVE_HIGH>,
+		            <&gpioc 4 GPIO_ACTIVE_HIGH>,
+		            <&gpioc 5 GPIO_ACTIVE_HIGH>,
+		            <&gpioc 6 GPIO_ACTIVE_HIGH>,
+		            <&gpioc 7 GPIO_ACTIVE_HIGH>;
+	};
+
+	x_stepper: stepper_x {
+		compatible = "gpio-stepper";
+		label = "STEPPER_X";
+		step-gpios = <&gpiod 0 GPIO_ACTIVE_HIGH>;
+		dir-gpios = <&gpiod 1 GPIO_ACTIVE_HIGH>;
+		en-gpios = <&gpiod 2 GPIO_ACTIVE_HIGH>;
+	};
+
+	y_stepper: stepper_y {
+		compatible = "gpio-stepper";
+		label = "STEPPER_Y";
+		step-gpios = <&gpiod 3 GPIO_ACTIVE_HIGH>;
+		dir-gpios = <&gpiod 4 GPIO_ACTIVE_HIGH>;
+		en-gpios = <&gpiod 5 GPIO_ACTIVE_HIGH>;
+	};
+
+	z_stepper: stepper_z {
+		compatible = "gpio-stepper";
+		label = "STEPPER_Z";
+		step-gpios = <&gpiod 6 GPIO_ACTIVE_HIGH>;
+		dir-gpios = <&gpiod 7 GPIO_ACTIVE_HIGH>;
+		en-gpios = <&gpioe 0 GPIO_ACTIVE_HIGH>;
+	};
+};
