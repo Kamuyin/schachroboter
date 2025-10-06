@@ -4,13 +4,15 @@
 #include <zephyr/drivers/gpio.h>
 #include "app/app.h"
 #include "hal/gpio_matrix.h"
-#include "hal/stepper.h"
-#include "hal/pinmap.h"
-#include "subsys/motion/planner.h"
+// Temporarily disabled components for chess board testing phase
+// #include "hal/stepper.h"
+// #include "hal/pinmap.h"
+// #include "subsys/motion/planner.h"
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 
 // GPIO device references
+#define GPIO_DEVICE_A DEVICE_DT_GET(DT_NODELABEL(gpioa))
 #define GPIO_DEVICE_B DEVICE_DT_GET(DT_NODELABEL(gpiob))
 #define GPIO_DEVICE_C DEVICE_DT_GET(DT_NODELABEL(gpioc))
 #define GPIO_DEVICE_D DEVICE_DT_GET(DT_NODELABEL(gpiod))
@@ -20,29 +22,35 @@ LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 // GPIO Matrix Configuration for 8x8 chess board scanning
 static const matrix_cfg_t matrix_config = {
     .rows = {
-        {.port = GPIO_DEVICE_B, .pin = 0, .dt_flags = GPIO_ACTIVE_HIGH},
-        {.port = GPIO_DEVICE_B, .pin = 1, .dt_flags = GPIO_ACTIVE_HIGH},
-        {.port = GPIO_DEVICE_B, .pin = 2, .dt_flags = GPIO_ACTIVE_HIGH},
-        {.port = GPIO_DEVICE_B, .pin = 3, .dt_flags = GPIO_ACTIVE_HIGH},
-        {.port = GPIO_DEVICE_B, .pin = 4, .dt_flags = GPIO_ACTIVE_HIGH},
-        {.port = GPIO_DEVICE_B, .pin = 5, .dt_flags = GPIO_ACTIVE_HIGH},
-        {.port = GPIO_DEVICE_B, .pin = 6, .dt_flags = GPIO_ACTIVE_HIGH},
-        {.port = GPIO_DEVICE_B, .pin = 7, .dt_flags = GPIO_ACTIVE_HIGH}
+        {.port = GPIO_DEVICE_D, .pin = 13, .dt_flags = 0},
+        {.port = GPIO_DEVICE_D, .pin = 12, .dt_flags = 0},
+        {.port = GPIO_DEVICE_D, .pin = 11, .dt_flags = 0},
+        {.port = GPIO_DEVICE_E, .pin = 10, .dt_flags = 0},
+        {.port = GPIO_DEVICE_E, .pin = 12, .dt_flags = 0},
+        {.port = GPIO_DEVICE_E, .pin = 14, .dt_flags = 0},
+        {.port = GPIO_DEVICE_E, .pin = 15, .dt_flags = 0},
+        {.port = GPIO_DEVICE_E, .pin = 13, .dt_flags = 0}
     },
     .cols = {
-        {.port = GPIO_DEVICE_C, .pin = 0, .dt_flags = GPIO_ACTIVE_HIGH},
-        {.port = GPIO_DEVICE_C, .pin = 1, .dt_flags = GPIO_ACTIVE_HIGH},
-        {.port = GPIO_DEVICE_C, .pin = 2, .dt_flags = GPIO_ACTIVE_HIGH},
-        {.port = GPIO_DEVICE_C, .pin = 3, .dt_flags = GPIO_ACTIVE_HIGH},
-        {.port = GPIO_DEVICE_C, .pin = 4, .dt_flags = GPIO_ACTIVE_HIGH},
-        {.port = GPIO_DEVICE_C, .pin = 5, .dt_flags = GPIO_ACTIVE_HIGH},
-        {.port = GPIO_DEVICE_C, .pin = 6, .dt_flags = GPIO_ACTIVE_HIGH},
-        {.port = GPIO_DEVICE_C, .pin = 7, .dt_flags = GPIO_ACTIVE_HIGH}
+        {.port = GPIO_DEVICE_F, .pin = 4,  .dt_flags = 0},
+        {.port = GPIO_DEVICE_E, .pin = 8,  .dt_flags = 0},
+        {.port = GPIO_DEVICE_F, .pin = 10, .dt_flags = 0},
+        {.port = GPIO_DEVICE_E, .pin = 7,  .dt_flags = 0},
+        {.port = GPIO_DEVICE_D, .pin = 14, .dt_flags = 0},
+        {.port = GPIO_DEVICE_D, .pin = 15, .dt_flags = 0},
+        {.port = GPIO_DEVICE_F, .pin = 14, .dt_flags = 0},
+        {.port = GPIO_DEVICE_E, .pin = 9,  .dt_flags = 0}
     },
+
     .active_high = true,
+
     .period_ms = 10
 };
 
+// =============================================================================
+// TEMPORARILY DISABLED COMPONENTS FOR CHESS BOARD TESTING PHASE
+// =============================================================================
+/*
 // TB6600 Stepper Motor Configurations
 static const stepper_cfg_t x_axis_config = {
     .step = {.port = X_STEP_GPIO, .pin = X_STEP_PIN, .dt_flags = GPIO_ACTIVE_HIGH},
@@ -106,7 +114,22 @@ static const struct gpio_dt_spec electromagnet_gpio = {
     .pin = 1,
     .dt_flags = GPIO_ACTIVE_HIGH
 };
+*/
 
+// =============================================================================
+// ACTIVE COMPONENTS FOR CHESS BOARD TESTING 
+// =============================================================================
+// Built-in LED for basic status indication
+static const struct gpio_dt_spec builtin_led = {
+    .port = GPIO_DEVICE_B,
+    .pin = 14,  // Built-in LED on Nucleo F767ZI 
+    .dt_flags = GPIO_ACTIVE_HIGH
+};
+
+// =============================================================================
+// DISABLED FUNCTIONS FOR TESTING PHASE
+// =============================================================================
+/*
 static int init_status_leds(void)
 {
     int rc = 0;
@@ -171,58 +194,59 @@ static void set_status_led(int led_index, bool state)
         gpio_pin_set_dt(&status_leds[led_index], state ? 1 : 0);
     }
 }
+*/
+
+// =============================================================================
+// SIMPLIFIED FUNCTIONS FOR CHESS BOARD TESTING
+// =============================================================================
+static int init_builtin_led(void)
+{
+    if (!device_is_ready(builtin_led.port)) {
+        LOG_ERR("Built-in LED GPIO device not ready");
+        return -ENODEV;
+    }
+    
+    int rc = gpio_pin_configure_dt(&builtin_led, GPIO_OUTPUT_INACTIVE);
+    if (rc == 0) {
+        LOG_INF("Built-in LED initialized successfully");
+        // Flash LED to indicate successful initialization
+        gpio_pin_set_dt(&builtin_led, 1);
+        k_msleep(200);
+        gpio_pin_set_dt(&builtin_led, 0);
+    }
+    
+    return rc;
+}
+
+static void set_builtin_led(bool state)
+{
+    gpio_pin_set_dt(&builtin_led, state ? 1 : 0);
+}
 
 int main(void)
 {
-    LOG_INF("Booting Chess Robot Firmware v2.0");
-    LOG_INF("Platform: STM32 Nucleo F767ZI with TB6600 stepper drivers");
+    LOG_INF("Booting Chess Robot Firmware - TESTING MODE");
+    LOG_INF("Platform: STM32 Nucleo F767ZI");
+    LOG_INF("Active Components: Chess Board Detection Only");
     
     int rc = 0;
     
-    // Initialize status LEDs first for visual feedback
-    rc = init_status_leds();
+    // Initialize built-in LED for basic status indication
+    rc = init_builtin_led();
     if (rc) {
-        LOG_ERR("Failed to initialize status LEDs: %d", rc);
+        LOG_ERR("Failed to initialize built-in LED: %d", rc);
         return rc;
     }
     
-    // Set red LED to indicate boot process
-    set_status_led(0, true); // Red LED on
+    // Set LED on to indicate boot process
+    set_builtin_led(true);
     
-    // Initialize emergency stop
-    rc = init_emergency_stop();
-    if (rc) {
-        LOG_ERR("Failed to initialize emergency stop: %d", rc);
-        return rc;
-    }
-    
-    // Initialize electromagnet control
-    rc = init_electromagnet();
-    if (rc) {
-        LOG_ERR("Failed to initialize electromagnet: %d", rc);
-        return rc;
-    }
-    
-    // Initialize GPIO matrix scanner for chess board
+    // Initialize GPIO matrix scanner for chess board - THIS IS THE MAIN COMPONENT
     LOG_INF("Initializing chess board matrix scanner...");
     rc = gpio_matrix_init(&matrix_config);
     if (rc) {
         LOG_ERR("Failed to initialize GPIO matrix: %d", rc);
-        return rc;
-    }
-    
-    // Initialize motion planner with TB6600 stepper motors
-    LOG_INF("Initializing TB6600 motion control system...");
-    rc = planner_init(&motion_planner, &x_axis_config, &y_axis_config, &z_axis_config);
-    if (rc) {
-        LOG_ERR("Failed to initialize motion planner: %d", rc);
-        return rc;
-    }
-    
-    // Enable motion planner
-    rc = planner_enable(&motion_planner, true);
-    if (rc) {
-        LOG_ERR("Failed to enable motion planner: %d", rc);
+        set_builtin_led(false);  // Turn off LED to indicate failure
         return rc;
     }
     
@@ -230,51 +254,47 @@ int main(void)
     LOG_INF("Starting chess board scanning...");
     gpio_matrix_start();
     
-    // Initialize application layer
-    LOG_INF("Starting application layer...");
+    // Initialize application layer (only for board state management)
+    LOG_INF("Starting application layer (board detection only)...");
     rc = app_start();
     if (rc) {
         LOG_ERR("Failed to start application: %d", rc);
+        set_builtin_led(false);  // Turn off LED to indicate failure
         return rc;
     }
     
-    // Boot sequence complete
-    set_status_led(0, false); // Red LED off
-    set_status_led(1, true);  // Green LED on
+    // Boot sequence complete - flash LED to indicate success
+    for (int i = 0; i < 3; i++) {
+        set_builtin_led(false);
+        k_msleep(100);
+        set_builtin_led(true);
+        k_msleep(100);
+    }
     
-    LOG_INF("Chess robot system initialization complete");
+    LOG_INF("Chess board testing system initialization complete");
     LOG_INF("Board scanning: Active");
-    LOG_INF("Motion control: Ready");
-    LOG_INF("MQTT communication: Starting...");
+    LOG_INF("Motion control: DISABLED");
+    LOG_INF("MQTT communication: DISABLED");
+    LOG_INF("Emergency stop: DISABLED");
+    LOG_INF("Stepper motors: DISABLED");
     
-    // Main system monitoring loop
+    // Simple main loop for board testing
+    bool led_state = false;
+    uint32_t heartbeat_counter = 0;
+    
     while (true) {
-        // Check emergency stop
-        if (check_emergency_stop()) {
-            LOG_WRN("EMERGENCY STOP ACTIVATED!");
-            planner_emergency_stop(&motion_planner);
-            set_status_led(0, true);  // Red LED on
-            set_status_led(1, false); // Green LED off
+        // Heartbeat LED (slow blink every 2 seconds to show system is alive)
+        heartbeat_counter++;
+        if (heartbeat_counter >= 20) {  // 20 * 100ms = 2 seconds
+            led_state = !led_state;
+            set_builtin_led(led_state);
+            heartbeat_counter = 0;
             
-            // Wait for emergency stop to be released
-            while (check_emergency_stop()) {
-                k_msleep(100);
-            }
-            
-            LOG_INF("Emergency stop released - system requires restart");
-            set_status_led(0, false);
-            set_status_led(1, true);
+            // Log system status periodically
+            LOG_INF("System alive - Board scanning active");
         }
         
-        // Update status indication based on system state
-        if (planner_is_moving(&motion_planner)) {
-            // Blue LED indicates motion
-            set_status_led(2, true);
-        } else {
-            set_status_led(2, false);
-        }
-        
-        // System heartbeat
+        // Simple system heartbeat
         k_msleep(100);
     }
     
