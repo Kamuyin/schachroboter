@@ -1,0 +1,165 @@
+#include <zephyr/kernel.h>
+#include <zephyr/net/socket.h>
+#include <zephyr/net/mqtt.h>
+#include <zephyr/net/dns_resolve.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/random/random.h>
+#include "mqtt_client.h"
+#include "app_config.h"
+
+LOG_MODULE_REGISTER(mqtt_client, LOG_LEVEL_INF);
+
+static uint8_t rx_buffer[128];
+static uint8_t tx_buffer[128];
+static struct mqtt_client client_ctx;
+static struct sockaddr_storage broker;
+static struct pollfd fds;
+
+static void mqtt_evt_handler(struct mqtt_client *const client, const struct mqtt_evt *evt)
+{
+    switch (evt->type) {
+    case MQTT_EVT_CONNACK:
+        if (evt->result == 0) {
+            LOG_INF("MQTT client connected");
+        } else {
+            LOG_ERR("MQTT connection failed: %d", evt->result);
+        }
+        break;
+
+    case MQTT_EVT_DISCONNECT:
+        LOG_WRN("MQTT client disconnected: %d", evt->result);
+        break;
+
+    case MQTT_EVT_PUBLISH:
+        LOG_INF("MQTT publish received");
+        break;
+
+    case MQTT_EVT_PUBACK:
+        LOG_DBG("MQTT PUBACK received");
+        break;
+
+    default:
+        break;
+    }
+}
+
+static int mqtt_broker_connect(void)
+{
+    struct sockaddr_in *broker4 = (struct sockaddr_in *)&broker;
+    struct zsock_addrinfo hints = {0};
+    struct zsock_addrinfo *res;
+    int ret;
+
+    LOG_INF("Resolving MQTT broker hostname: %s", MQTT_BROKER_HOSTNAME);
+
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+
+    ret = zsock_getaddrinfo(MQTT_BROKER_HOSTNAME, NULL, &hints, &res);
+    if (ret != 0) {
+        LOG_ERR("DNS resolution failed for %s: %d", MQTT_BROKER_HOSTNAME, ret);
+        return -ENOENT;
+    }
+
+    memcpy(broker4, res->ai_addr, sizeof(struct sockaddr_in));
+    broker4->sin_port = htons(MQTT_BROKER_PORT);
+    
+    char addr_str[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &broker4->sin_addr, addr_str, sizeof(addr_str));
+    LOG_INF("Resolved %s to %s:%d", MQTT_BROKER_HOSTNAME, addr_str, MQTT_BROKER_PORT);
+
+    zsock_freeaddrinfo(res);
+
+    mqtt_client_init(&client_ctx);
+
+    client_ctx.broker = &broker;
+    client_ctx.evt_cb = mqtt_evt_handler;
+    client_ctx.client_id.utf8 = (uint8_t *)MQTT_CLIENT_ID;
+    client_ctx.client_id.size = strlen(MQTT_CLIENT_ID);
+    client_ctx.password = NULL;
+    client_ctx.user_name = NULL;
+    client_ctx.protocol_version = MQTT_VERSION_3_1_1;
+    client_ctx.rx_buf = rx_buffer;
+    client_ctx.rx_buf_size = sizeof(rx_buffer);
+    client_ctx.tx_buf = tx_buffer;
+    client_ctx.tx_buf_size = sizeof(tx_buffer);
+    client_ctx.transport.type = MQTT_TRANSPORT_NON_SECURE;
+
+    ret = mqtt_connect(&client_ctx);
+    if (ret < 0) {
+        LOG_ERR("MQTT connect failed: %d", ret);
+        return ret;
+    }
+
+    fds.fd = client_ctx.transport.tcp.sock;
+    fds.events = POLLIN;
+
+    LOG_INF("Connected to MQTT broker");
+    return 0;
+}
+
+int app_mqtt_init(void)
+{
+    LOG_INF("MQTT client initialized");
+    return 0;
+}
+
+void mqtt_client_thread(void *p1, void *p2, void *p3)
+{
+    int ret;
+
+    ARG_UNUSED(p1);
+    ARG_UNUSED(p2);
+    ARG_UNUSED(p3);
+
+    LOG_INF("MQTT client thread started");
+
+    k_sleep(K_SECONDS(5));
+
+    ret = mqtt_broker_connect();
+    if (ret < 0) {
+        LOG_ERR("Failed to connect to broker");
+        return;
+    }
+
+    while (1) {
+        ret = poll(&fds, 1, mqtt_keepalive_time_left(&client_ctx));
+        if (ret < 0) {
+            LOG_ERR("Poll error: %d", errno);
+            break;
+        }
+
+        mqtt_input(&client_ctx);
+
+        if ((fds.revents & POLLERR) || (fds.revents & POLLNVAL)) {
+            LOG_ERR("Socket error");
+            break;
+        }
+
+        ret = mqtt_live(&client_ctx);
+        if (ret < 0 && ret != -EAGAIN) {
+            LOG_ERR("MQTT live error: %d", ret);
+            break;
+        }
+
+        k_sleep(K_MSEC(100));
+    }
+
+    (void)mqtt_disconnect(&client_ctx, 0);
+}
+
+int app_mqtt_publish(const char *topic, const char *payload, uint32_t payload_len)
+{
+    struct mqtt_publish_param param;
+
+    param.message.topic.qos = MQTT_QOS_1_AT_LEAST_ONCE;
+    param.message.topic.topic.utf8 = (uint8_t *)topic;
+    param.message.topic.topic.size = strlen(topic);
+    param.message.payload.data = (uint8_t *)payload;
+    param.message.payload.len = payload_len;
+    param.message_id = sys_rand32_get();
+    param.dup_flag = 0;
+    param.retain_flag = 0;
+
+    return mqtt_publish(&client_ctx, &param);
+}
