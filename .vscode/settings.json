@@ -1,6 +1,7 @@
 {
     "files.associations": {
-        "gpio_matrix.h": "c"
+        "gpio_matrix.h": "c",
+        "gpio.h": "c"
     },
     "cmake.ignoreCMakeListsMissing": true
 }
