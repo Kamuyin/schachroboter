@@ -7,8 +7,12 @@ import javafx.scene.control.ListView;
 import javafx.scene.layout.VBox;
 import org.example.model.Move;
 import org.example.model.PieceColor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class GameLogView {
+    private static final Logger logger = LoggerFactory.getLogger(GameLogView.class);
+    
     private final ListView<String> moveListView;
     private final ObservableList<String> moves;
     private int moveNumber;
@@ -35,6 +39,7 @@ public class GameLogView {
             moveNumber++;
         }
 
+        logger.debug("Adding move to game log: {}", moveText);
         moves.add(moveText);
         moveListView.scrollTo(moves.size() - 1);
     }
@@ -50,6 +55,7 @@ public class GameLogView {
     }
 
     public void clear() {
+        logger.debug("Clearing game log");
         moves.clear();
         moveNumber = 1;
     }

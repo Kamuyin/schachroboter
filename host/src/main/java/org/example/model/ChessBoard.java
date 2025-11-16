@@ -4,17 +4,22 @@ import com.github.bhlangonijr.chesslib.Board;
 import com.github.bhlangonijr.chesslib.Square;
 import com.github.bhlangonijr.chesslib.Side;
 import com.github.bhlangonijr.chesslib.move.MoveGenerator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class ChessBoard {
+    private static final Logger logger = LoggerFactory.getLogger(ChessBoard.class);
+    
     private final Board internalBoard;
     private final List<Move> moveHistory;
     private final List<Piece> capturedWhitePieces;
     private final List<Piece> capturedBlackPieces;
 
     public ChessBoard() {
+        logger.debug("Initializing chess board");
         internalBoard = new Board();
         moveHistory = new ArrayList<>();
         capturedWhitePieces = new ArrayList<>();
@@ -92,6 +97,7 @@ public class ChessBoard {
 
         // Capture piece if present
         if (capturedPiece != null) {
+            logger.debug("Piece captured: {}", capturedPiece);
             if (capturedPiece.getColor() == PieceColor.WHITE) {
                 capturedWhitePieces.add(capturedPiece);
             } else {
@@ -105,6 +111,7 @@ public class ChessBoard {
         // Record move
         Move move = new Move(from, to, movingPiece, capturedPiece);
         moveHistory.add(move);
+        logger.debug("Move made: {} -> {}, total moves: {}", from, to, moveHistory.size());
 
         return true;
     }
@@ -125,6 +132,7 @@ public class ChessBoard {
     }
 
     public void reset() {
+        logger.info("Resetting board to initial position");
         internalBoard.loadFromFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
         moveHistory.clear();
         capturedWhitePieces.clear();
