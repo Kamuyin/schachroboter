@@ -1,0 +1,213 @@
+asyncapi: 3.0.0
+
+info:
+  title: MQTT API Contract
+  version: 1.0.0
+  description: |-
+    MQTT topics and message schemas 
+
+defaultContentType: application/json
+
+servers:
+  local-broker:
+    host: 192.168.0.100:1883
+    protocol: mqtt
+    description: Local MQTT broker used for robot control and telemetry.
+
+channels:
+  robotCommand:
+    address: chess/robot/command
+    description: Commands sent from Stockfish or control software to the robot controller.
+    messages:
+      robotCommandMsg:
+        $ref: '#/components/messages/RobotCommandMessage'
+
+  robotStatus:
+    address: chess/robot/status
+    description: Status updates published by the robot controller.
+    messages:
+      robotStatusMsg:
+        $ref: '#/components/messages/RobotStatusMessage'
+
+  boardState:
+    address: chess/board/state
+    description: Publishes the current detected chessboard state from the reed switch matrix.
+    messages:
+      boardStateMsg:
+        $ref: '#/components/messages/BoardStateMessage'
+
+  systemLog:
+    address: chess/system/log
+    description: Log entries or diagnostic messages from the microcontroller.
+    messages:
+      systemLogMsg:
+        $ref: '#/components/messages/SystemLogMessage'
+
+operations:
+  receiveRobotCommand:
+    action: receive
+    channel:
+      $ref: '#/channels/robotCommand'
+    summary: Robot command receiver.
+    description: Receives commands to control the robot (move, pickup, release, calibrate).
+    messages:
+      - $ref: '#/channels/robotCommand/messages/robotCommandMsg'
+
+  publishRobotStatus:
+    action: send
+    channel:
+      $ref: '#/channels/robotStatus'
+    summary: Publishes the robot's current operational state.
+    description: Sends status updates including position, state, and any errors.
+    messages:
+      - $ref: '#/channels/robotStatus/messages/robotStatusMsg'
+
+  publishBoardState:
+    action: send
+    channel:
+      $ref: '#/channels/boardState'
+    summary: Publishes the chessboard state.
+    description: Sends the current state of all chess pieces detected by reed switches.
+    messages:
+      - $ref: '#/channels/boardState/messages/boardStateMsg'
+
+  publishSystemLog:
+    action: send
+    channel:
+      $ref: '#/channels/systemLog'
+    summary: Publishes system log messages.
+    description: Sends diagnostic and error log messages from the microcontroller.
+    messages:
+      - $ref: '#/channels/systemLog/messages/systemLogMsg'
+
+components:
+  messages:
+    RobotCommandMessage:
+      name: RobotCommandMessage
+      title: Robot Command
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/RobotCommandPayload'
+      
+
+    RobotStatusMessage:
+      name: RobotStatusMessage
+      title: Robot Status
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/RobotStatusPayload'
+
+    BoardStateMessage:
+      name: BoardStateMessage
+      title: Board State
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/BoardStatePayload'
+
+    SystemLogMessage:
+      name: SystemLogMessage
+      title: System Log
+      contentType: text/plain
+      payload:
+        type: string
+        description: Log message text.
+
+  schemas:
+    RobotCommandPayload:
+      type: object
+      required:
+        - command
+        - timestamp
+      properties:
+        command:
+          type: string
+          enum:
+            - move
+            - pickup
+            - release
+            - calibrate
+          description: Type of command to execute.
+        from:
+          type: string
+          pattern: '^[A-H][1-8]$'
+          description: Optional source square (for moves).
+        to:
+          type: string
+          pattern: '^[A-H][1-8]$'
+          description: Optional target square (for moves).
+        speed:
+          type: number
+          description: Movement speed in mm/min.
+        timestamp:
+          type: string
+          format: date-time
+          description: Time of command issuance.
+      examples:
+        - command: move
+          from: E2
+          to: E4
+          speed: 100
+          timestamp: '2025-11-15T10:30:00Z'
+
+    RobotStatusPayload:
+      type: object
+      required:
+        - state
+        - timestamp
+      properties:
+        state:
+          type: string
+          enum:
+            - idle
+            - moving
+            - error
+        position:
+          type: object
+          properties:
+            x:
+              type: number
+            y:
+              type: number
+            z:
+              type: number
+        error_code:
+          type: string
+          nullable: true
+        last_command:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+      examples:
+        - state: idle
+          position:
+            x: 50.5
+            y: 30.2
+            z: 10.0
+          error_code: null
+          last_command: move
+          timestamp: '2025-11-15T10:30:00Z'
+
+    BoardStatePayload:
+      type: object
+      required:
+        - board
+        - timestamp
+      properties:
+        board:
+          type: object
+          additionalProperties:
+            type: string
+          description: |
+            Chess piece at that square (uppercase = white, lowercase = black).
+            Keys are square coordinates (A1-H8), values are piece codes.
+        timestamp:
+          type: string
+          format: date-time
+      examples:
+        - board:
+            A1: r
+            A2: p
+            B1: N
+            H8: R
+          timestamp: '2025-11-15T10:30:00Z'

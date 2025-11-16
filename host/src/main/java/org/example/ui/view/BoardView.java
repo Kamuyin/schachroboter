@@ -6,20 +6,27 @@ import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.scene.text.Font;
 import org.example.model.*;
+import org.example.settings.DisplaySettings;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
 
 public class BoardView {
+    private static final Logger logger = LoggerFactory.getLogger(BoardView.class);
+    
     private final ChessBoard chessBoard;
     private final GridPane boardGrid;
     private final SquareView[][] squares;
     private Position selectedPosition;
     private final Consumer<Move> onMoveCallback;
     private List<Position> highlightedMoves;
+    private boolean showLegalMoves = true;
 
     public BoardView(ChessBoard chessBoard, Consumer<Move> onMoveCallback) {
+        logger.debug("Initializing BoardView");
         this.chessBoard = chessBoard;
         this.onMoveCallback = onMoveCallback;
         this.squares = new SquareView[8][8];
@@ -74,22 +81,22 @@ public class BoardView {
 
     private void handleSquareClick(Position pos) {
         if (selectedPosition == null) {
-            // First click - select piece
             Piece piece = chessBoard.getPiece(pos);
             if (piece != null && piece.getColor() == chessBoard.getCurrentTurn()) {
+                logger.debug("Selected piece at {}: {}", pos, piece);
                 selectedPosition = pos;
                 highlightSquare(pos, true);
 
-                // Highlight legal moves for this piece
-                highlightedMoves = chessBoard.getLegalMovesFrom(pos);
-                for (Position legalPos : highlightedMoves) {
-                    squares[legalPos.row()][legalPos.col()].setLegalMove(true);
+                if (showLegalMoves) {
+                    highlightedMoves = chessBoard.getLegalMovesFrom(pos);
+                    for (Position legalPos : highlightedMoves) {
+                        squares[legalPos.row()][legalPos.col()].setLegalMove(true);
+                    }
                 }
             }
         } else {
-            // Second click - try to move
             if (pos.equals(selectedPosition)) {
-                // Deselect
+                logger.debug("Deselected piece at {}", pos);
                 clearHighlights();
                 selectedPosition = null;
             } else {
@@ -99,8 +106,8 @@ public class BoardView {
 
                 clearHighlights();
 
-                // Check if promotion is needed
                 if (chessBoard.isPromotion(from, pos)) {
+                    logger.debug("Promotion detected for move {} -> {}", from, pos);
                     Optional<PieceType> promotionChoice = showPromotionDialog(movingPiece.getColor());
                     if (promotionChoice.isPresent()) {
                         if (chessBoard.makeMove(from, pos, promotionChoice.get())) {
@@ -189,6 +196,12 @@ public class BoardView {
         }
         selectedPosition = null;
         highlightedMoves = List.of();
+    }
+
+    public void applySettings(DisplaySettings settings) {
+        logger.debug("Applying display settings to board view");
+        this.showLegalMoves = settings.isShowLegalMoves();
+        refresh();
     }
 
     public Pane getView() {

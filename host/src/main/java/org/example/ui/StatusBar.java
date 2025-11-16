@@ -6,8 +6,12 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import org.example.model.ChessBoard;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class StatusBar {
+    private static final Logger logger = LoggerFactory.getLogger(StatusBar.class);
+    
     private final ChessBoard chessBoard;
     private final Label statusLabel;
     private final Label positionLabel;
@@ -16,6 +20,7 @@ public class StatusBar {
     private boolean isInCheck = false;
 
     public StatusBar(ChessBoard chessBoard) {
+        logger.debug("Initializing StatusBar");
         this.chessBoard = chessBoard;
         this.statusLabel = new Label();
         this.positionLabel = new Label();
