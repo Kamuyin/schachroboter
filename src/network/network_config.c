@@ -3,6 +3,7 @@
 #include <zephyr/net/net_core.h>
 #include <zephyr/net/net_mgmt.h>
 #include <zephyr/net/ethernet.h>
+#include <zephyr/net/dns_resolve.h>
 #include <zephyr/logging/log.h>
 #include "network_config.h"
 #include "app_config.h"
@@ -129,10 +130,7 @@ int network_configure_static_ip(void)
     net_if_ipv4_set_netmask_by_addr(iface, &addr, &netmask);
     net_if_ipv4_set_gw(iface, &gateway);
 
-    LOG_INF("Static IP configured: %s", STATIC_IPV4_ADDR);
-    
-    // Give time for configuration to settle
-    k_msleep(100);
-    
-    return 0;
+	LOG_INF("Static IP configured: %s", STATIC_IPV4_ADDR);
+
+	return 0;
 }
