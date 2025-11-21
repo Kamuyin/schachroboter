@@ -5,14 +5,17 @@
 #include "dhcp_server.h"
 #include "mqtt_client.h"
 #include "application.h"
+#include "robot_controller.h"
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_INF);
 
 K_THREAD_STACK_DEFINE(mqtt_client_stack, MQTT_THREAD_STACK_SIZE);
 K_THREAD_STACK_DEFINE(application_stack, 4096);
+K_THREAD_STACK_DEFINE(robot_controller_stack, 2048);
 
 static struct k_thread mqtt_client_thread_data;
 static struct k_thread application_thread_data;
+static struct k_thread robot_controller_thread_data;
 
 int main(void)
 {
@@ -53,6 +56,13 @@ int main(void)
         return ret;
     }
 
+    LOG_DBG("Initializing robot controller...");
+    ret = robot_controller_init();
+    if (ret < 0) {
+        LOG_ERR("Robot controller initialization failed: %d", ret);
+        return ret;
+    }
+
     LOG_DBG("Initializing application...");
     ret = application_init();
     if (ret < 0) {
@@ -69,6 +79,12 @@ int main(void)
     k_thread_create(&application_thread_data, application_stack,
                     K_THREAD_STACK_SIZEOF(application_stack),
                     (k_thread_entry_t)application_task,
+                    NULL, NULL, NULL,
+                    THREAD_PRIORITY, 0, K_NO_WAIT);
+
+    k_thread_create(&robot_controller_thread_data, robot_controller_stack,
+                    K_THREAD_STACK_SIZEOF(robot_controller_stack),
+                    (k_thread_entry_t)robot_controller_task,
                     NULL, NULL, NULL,
                     THREAD_PRIORITY, 0, K_NO_WAIT);
 
