@@ -690,6 +690,18 @@ void mqtt_client_thread(void *p1, void *p2, void *p3)
     LOG_INF("MQTT client thread started");
 
     while (1) {
+        /* Wait for network interface and carrier to be up before reconnecting */
+        struct net_if *iface = network_get_interface();
+        int carrier_waits = 0;
+        while (!iface || !net_if_is_up(iface) || !net_if_is_carrier_ok(iface)) {
+            if (carrier_waits == 0) {
+                LOG_WRN("MQTT: Waiting for network interface and carrier to be up before reconnecting...");
+            }
+            carrier_waits++;
+            k_sleep(K_SECONDS(2));
+            iface = network_get_interface();
+        }
+
         if (first_attempt) {
             k_sleep(K_SECONDS(5));
             first_attempt = false;
@@ -728,6 +740,20 @@ void mqtt_client_thread(void *p1, void *p2, void *p3)
 
         // Subscribe to all registered topics now that we're connected
         subscribe_to_topics();
+
+        /* Publish online status to help verify connectivity */
+        {
+            char buf[96];
+            int len = snprintk(buf, sizeof(buf), "{\"status\":\"online\",\"timestamp\":%u}", k_uptime_get_32());
+            if (len > 0) {
+                int pr = app_mqtt_publish("chess/system/online", buf, (uint32_t)len);
+                if (pr < 0) {
+                    LOG_WRN("Failed to publish online status: %d", pr);
+                } else {
+                    LOG_INF("Published online status");
+                }
+            }
+        }
 
         // Main MQTT processing loop
         while (mqtt_connected) {
@@ -823,4 +849,9 @@ int app_mqtt_subscribe(const char *topic, mqtt_message_callback_t callback)
     }
 
     return 0;
+}
+
+bool app_mqtt_is_connected(void)
+{
+    return mqtt_connected;
 }
