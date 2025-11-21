@@ -10,6 +10,20 @@ static chess_board_state_t board_state;
 static board_move_callback_t move_callback = NULL;
 static board_state_callback_t state_callback = NULL;
 
+static void log_board_mask(uint64_t mask)
+{
+    /* Debug helper: prints the 8x8 occupancy grid, 1=occupied, 0=empty */
+    for (int r = 0; r < CHESS_BOARD_SIZE; r++) {
+        char line[CHESS_BOARD_SIZE + 1];
+        for (int c = 0; c < CHESS_BOARD_SIZE; c++) {
+            bool occ = (mask & (1ULL << (r * CHESS_BOARD_SIZE + c))) != 0ULL;
+            line[c] = occ ? '1' : '0';
+        }
+        line[CHESS_BOARD_SIZE] = '\0';
+        LOG_DBG("row %d: %s", r, line);
+    }
+}
+
 int board_manager_init(void)
 {
     int ret;
@@ -95,6 +109,9 @@ int board_manager_update(void)
         board_state.previous_mask = board_state.occupied_mask;
         board_state.occupied_mask = new_mask;
         board_state.last_update_time = k_uptime_get_32();
+
+        LOG_DBG("Board state changed. New mask:");
+        log_board_mask(new_mask);
 
         if (state_callback) {
             state_callback(&board_state);
