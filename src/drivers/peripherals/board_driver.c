@@ -54,7 +54,8 @@ int board_driver_init(void)
             LOG_ERR("Col %d GPIO port not ready", i);
             return -ENODEV;
         }
-        ret = gpio_pin_configure(col_pins[i].port, col_pins[i].pin, GPIO_INPUT | GPIO_PULL_DOWN);
+        gpio_flags_t flags = GPIO_INPUT | (BOARD_INPUT_PULL_UP ? GPIO_PULL_UP : GPIO_PULL_DOWN);
+        ret = gpio_pin_configure(col_pins[i].port, col_pins[i].pin, flags);
         if (ret < 0) {
             LOG_ERR("Failed to configure col pin %d: %d", i, ret);
             return ret;
@@ -81,7 +82,8 @@ int board_driver_scan(uint64_t *board_state)
             return ret;
         }
 
-        k_sleep(K_USEC(100));
+    /* Allow signals to settle before reading columns (increase if needed for stable reads) */
+    k_sleep(K_USEC(1000));
 
         for (int col = 0; col < BOARD_COLS; col++) {
             int value = gpio_pin_get(col_pins[col].port, col_pins[col].pin);
@@ -89,6 +91,11 @@ int board_driver_scan(uint64_t *board_state)
                 LOG_ERR("Failed to read col %d: %d", col, value);
                 gpio_pin_set(row_pins[row].port, row_pins[row].pin, 0);
                 return value;
+            }
+
+            /* Adapt to wiring polarity: invert when switches are active-low */
+            if (!BOARD_SWITCH_ACTIVE_HIGH) {
+                value = !value;
             }
 
             if (value) {

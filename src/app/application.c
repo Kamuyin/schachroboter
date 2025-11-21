@@ -32,8 +32,12 @@ static void on_move_detected(const board_move_t *move)
 
     char *payload = cJSON_PrintUnformatted(root);
     if (payload) {
-        app_mqtt_publish("chess/board/move", payload, strlen(payload));
-        LOG_INF("Published move to MQTT");
+        int rc = app_mqtt_publish("chess/board/move", payload, strlen(payload));
+        if (rc < 0) {
+            LOG_WRN("Failed to publish move (rc=%d) - MQTT connected: %s", rc, app_mqtt_is_connected() ? "yes" : "no");
+        } else {
+            LOG_INF("Published move to MQTT");
+        }
         cJSON_free(payload);
     }
 
@@ -42,6 +46,7 @@ static void on_move_detected(const board_move_t *move)
 
 static void on_state_changed(const chess_board_state_t *state)
 {
+    // Publish compact state (hex mask, move count, timestamp)
     cJSON *root = cJSON_CreateObject();
     if (!root) {
         LOG_ERR("Failed to create JSON object");
@@ -59,11 +64,41 @@ static void on_state_changed(const chess_board_state_t *state)
 
     char *payload = cJSON_PrintUnformatted(root);
     if (payload) {
-        app_mqtt_publish("chess/board/state", payload, strlen(payload));
+        int rc = app_mqtt_publish("chess/board/state", payload, strlen(payload));
+        if (rc < 0) {
+            LOG_DBG("Failed to publish state (rc=%d) - MQTT connected: %s", rc, app_mqtt_is_connected() ? "yes" : "no");
+        }
         cJSON_free(payload);
     }
-
     cJSON_Delete(root);
+
+    // Publish full board grid as array to chess/board/fullstate
+    cJSON *full = cJSON_CreateObject();
+    if (!full) {
+        LOG_ERR("Failed to create fullstate JSON object");
+        return;
+    }
+    cJSON_AddStringToObject(full, "type", "fullstate");
+    cJSON_AddNumberToObject(full, "timestamp", state->last_update_time);
+    cJSON *rows = cJSON_CreateArray();
+    for (int r = 0; r < CHESS_BOARD_SIZE; r++) {
+        cJSON *row = cJSON_CreateArray();
+        for (int c = 0; c < CHESS_BOARD_SIZE; c++) {
+            int occ = (state->occupied_mask & (1ULL << (r * CHESS_BOARD_SIZE + c))) ? 1 : 0;
+            cJSON_AddItemToArray(row, cJSON_CreateNumber(occ));
+        }
+        cJSON_AddItemToArray(rows, row);
+    }
+    cJSON_AddItemToObject(full, "board", rows);
+    char *full_payload = cJSON_PrintUnformatted(full);
+    if (full_payload) {
+        int rc = app_mqtt_publish("chess/board/fullstate", full_payload, strlen(full_payload));
+        if (rc < 0) {
+            LOG_DBG("Failed to publish fullstate (rc=%d) - MQTT connected: %s", rc, app_mqtt_is_connected() ? "yes" : "no");
+        }
+        cJSON_free(full_payload);
+    }
+    cJSON_Delete(full);
 }
 
 static void on_ping_received(const char *topic, const uint8_t *payload, uint32_t payload_len)
@@ -79,8 +114,12 @@ static void on_ping_received(const char *topic, const uint8_t *payload, uint32_t
 
     char *response = cJSON_PrintUnformatted(root);
     if (response) {
-        app_mqtt_publish("chess/system/pong", response, strlen(response));
-        LOG_INF("Responded to ping");
+        int rc = app_mqtt_publish("chess/system/pong", response, strlen(response));
+        if (rc < 0) {
+            LOG_WRN("Failed to publish pong (rc=%d) - MQTT connected: %s", rc, app_mqtt_is_connected() ? "yes" : "no");
+        } else {
+            LOG_INF("Responded to ping");
+        }
         cJSON_free(response);
     }
 
