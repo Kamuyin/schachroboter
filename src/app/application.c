@@ -3,6 +3,7 @@
 #include <cJSON.h>
 #include "board_manager.h"
 #include "mqtt_client.h"
+#include "robot_controller.h"
 
 LOG_MODULE_REGISTER(application, LOG_LEVEL_INF);
 
@@ -76,12 +77,63 @@ static void on_ping_received(const char *topic, const uint8_t *payload, uint32_t
 
     cJSON_AddStringToObject(root, "status", "pong");
     cJSON_AddNumberToObject(root, "timestamp", k_uptime_get_32());
+    cJSON_AddBoolToObject(root, "robot_busy", robot_controller_is_busy());
+
+    robot_position_t pos = robot_controller_get_position();
+    cJSON *position = cJSON_CreateObject();
+    cJSON_AddNumberToObject(position, "x", pos.x);
+    cJSON_AddNumberToObject(position, "y", pos.y);
+    cJSON_AddNumberToObject(position, "z", pos.z);
+    cJSON_AddItemToObject(root, "position", position);
 
     char *response = cJSON_PrintUnformatted(root);
     if (response) {
         app_mqtt_publish("chess/system/pong", response, strlen(response));
         LOG_INF("Responded to ping");
         cJSON_free(response);
+    }
+
+    cJSON_Delete(root);
+}
+
+static void on_robot_command_received(const char *topic, const uint8_t *payload, uint32_t payload_len)
+{
+    cJSON *root = cJSON_ParseWithLength((const char *)payload, payload_len);
+    if (!root) {
+        LOG_ERR("Failed to parse robot command JSON");
+        return;
+    }
+
+    cJSON *cmd = cJSON_GetObjectItem(root, "command");
+    if (!cmd || !cJSON_IsString(cmd)) {
+        LOG_ERR("Invalid command format");
+        cJSON_Delete(root);
+        return;
+    }
+
+    const char *command = cmd->valuestring;
+    LOG_INF("Robot command received: %s", command);
+
+    if (strcmp(command, "move") == 0) {
+        cJSON *x = cJSON_GetObjectItem(root, "x");
+        cJSON *y = cJSON_GetObjectItem(root, "y");
+        cJSON *z = cJSON_GetObjectItem(root, "z");
+        cJSON *speed = cJSON_GetObjectItem(root, "speed");
+        
+        if (x && y && z) {
+            uint32_t speed_us = speed && cJSON_IsNumber(speed) ? speed->valueint : 1000;
+            robot_controller_move_to(x->valueint, y->valueint, z->valueint, speed_us);
+            LOG_INF("Moving to X=%d Y=%d Z=%d", x->valueint, y->valueint, z->valueint);
+        }
+    } else if (strcmp(command, "home") == 0) {
+        robot_controller_home();
+        LOG_INF("Homing robot");
+    } else if (strcmp(command, "gripper_open") == 0) {
+        robot_controller_gripper_open();
+        LOG_INF("Opening gripper");
+    } else if (strcmp(command, "gripper_close") == 0) {
+        robot_controller_gripper_close();
+        LOG_INF("Closing gripper");
     }
 
     cJSON_Delete(root);
@@ -103,6 +155,7 @@ int application_init(void)
     board_manager_register_state_callback(on_state_changed);
 
     app_mqtt_subscribe("chess/system/ping", on_ping_received);
+    app_mqtt_subscribe("chess/robot/command", on_robot_command_received);
 
     LOG_INF("Application initialized");
     return 0;
