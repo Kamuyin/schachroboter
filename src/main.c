@@ -18,44 +18,42 @@ int main(void)
 {
     int ret;
 
-    LOG_INF("Starting Nucleo F767ZI Router Firmware");
-
-    LOG_INF("Step 1: Initializing network interface");
+    LOG_DBG("Network initializing...");
     ret = network_init();
     if (ret < 0) {
         LOG_ERR("Network initialization failed: %d", ret);
         return ret;
     }
 
-    // Give the interface time to come up
-    LOG_INF("Waiting for interface to be ready...");
+    LOG_DBG("Waiting for interface to be ready...");
     k_sleep(K_MSEC(500));
 
-    LOG_INF("Step 2: Configuring static IP address");
+
+    LOG_DBG("Configuring static IP address...");
     ret = network_configure_static_ip();
     if (ret < 0) {
         LOG_ERR("Static IP configuration failed: %d", ret);
         return ret;
     }
 
-    // Give IP configuration time to settle
-    LOG_INF("Waiting for IP configuration to settle...");
+    LOG_DBG("Waiting for IP configuration to settle...");
     k_sleep(K_MSEC(500));
 
-    LOG_INF("Step 3: Starting DHCP server");
+    LOG_DBG("Starting DHCP server...");
     ret = dhcp_server_init();
     if (ret < 0) {
         LOG_ERR("DHCP server initialization failed: %d", ret);
         return ret;
     }
 
-    LOG_INF("Step 4: Initializing MQTT client");
+    LOG_DBG("Initializing MQTT client...");
     ret = app_mqtt_init();
     if (ret < 0) {
         LOG_ERR("MQTT client initialization failed: %d", ret);
         return ret;
     }
 
+    LOG_DBG("Initializing application...");
     ret = application_init();
     if (ret < 0) {
         LOG_ERR("Application initialization failed: %d", ret);
@@ -74,8 +72,7 @@ int main(void)
                     NULL, NULL, NULL,
                     THREAD_PRIORITY, 0, K_NO_WAIT);
 
-    LOG_INF("System initialized successfully");
-    LOG_INF("DHCP server ready to serve clients");
+    LOG_INF("System is ready");
 
     return 0;
 }
