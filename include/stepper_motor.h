@@ -4,13 +4,15 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-typedef enum {
+typedef enum
+{
     STEPPER_STATE_IDLE = 0,
     STEPPER_STATE_MOVING,
     STEPPER_STATE_ERROR
 } stepper_state_t;
 
-typedef enum {
+typedef enum
+{
     STEPPER_DIR_CW = 0,
     STEPPER_DIR_CCW = 1
 } stepper_direction_t;
