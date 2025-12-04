@@ -39,9 +39,6 @@ int main(void)
         return ret;
     }
 
-    LOG_DBG("Waiting for IP configuration to settle...");
-    k_sleep(K_MSEC(500));
-
     LOG_DBG("Starting DHCP server...");
     ret = dhcp_server_init();
     if (ret < 0) {

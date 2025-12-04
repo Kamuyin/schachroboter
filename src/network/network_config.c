@@ -130,7 +130,12 @@ int network_configure_static_ip(void)
     net_if_ipv4_set_netmask_by_addr(iface, &addr, &netmask);
     net_if_ipv4_set_gw(iface, &gateway);
 
-	LOG_INF("Static IP configured: %s", STATIC_IPV4_ADDR);
+    LOG_INF("Static IP configured: %s", STATIC_IPV4_ADDR);
+    
+    // Give the network stack time to process the IP configuration
+    // and ensure Ethernet TX/RX is fully operational
+    LOG_INF("Waiting for network stack to stabilize...");
+    k_sleep(K_MSEC(2000));
 
-	return 0;
+    return 0;
 }
