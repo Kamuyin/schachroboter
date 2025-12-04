@@ -5,7 +5,8 @@
 
 #define MAX_STEPPER_MOTORS 8
 
-typedef enum {
+typedef enum
+{
     STEPPER_ID_X_AXIS = 0,
     STEPPER_ID_Y_AXIS,
     STEPPER_ID_Z_AXIS,
