@@ -12,7 +12,7 @@
 
 LOG_MODULE_REGISTER(mqtt_client, LOG_LEVEL_INF);
 
-#define MAX_SUBSCRIPTIONS 4
+#define MAX_SUBSCRIPTIONS 16
 
 static uint8_t rx_buffer[128];
 static uint8_t tx_buffer[128];
