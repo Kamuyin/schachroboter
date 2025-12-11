@@ -1,0 +1,16 @@
+#ifndef SERVO_CONFIG_H
+#define SERVO_CONFIG_H
+
+#define SERVO_1_GPIO_PORT DT_NODELABEL(gpioh)
+#define SERVO_1_GPIO_PIN 10
+
+#define SERVO_2_GPIO_PORT DT_NODELABEL(gpioh)
+#define SERVO_2_GPIO_PIN 11
+
+#define SERVO_3_GPIO_PORT DT_NODELABEL(gpioh)
+#define SERVO_3_GPIO_PIN 12
+
+#define SERVO_4_GPIO_PORT DT_NODELABEL(gpioh)
+#define SERVO_4_GPIO_PIN 13
+
+#endif
