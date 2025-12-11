@@ -1,11 +1,7 @@
 #ifndef BOARD_CONFIG_H
 #define BOARD_CONFIG_H
 
-// GPIO pins chosen to avoid Ethernet conflicts
-// STM32F767ZI Ethernet uses: PA1, PA2, PA7, PB13, PC1, PC4, PC5, PG11, PG13, PG14
-// Safe pins: PE8-PE15 for rows, PF0-PF7 for columns
-
-// --- REIHEN (ROWS) ---
+// --- Rows ---
 #define BOARD_ROW_0_PORT    DT_NODELABEL(gpiof) //5
 #define BOARD_ROW_0_PIN     1
 #define BOARD_ROW_1_PORT    DT_NODELABEL(gpioe) //7
@@ -23,7 +19,7 @@
 #define BOARD_ROW_7_PORT    DT_NODELABEL(gpiof)
 #define BOARD_ROW_7_PIN     8
 
-// --- SPALTEN (COLUMNS) ---
+// --- Columns ---
 #define BOARD_COL_0_PORT    DT_NODELABEL(gpiog)
 #define BOARD_COL_0_PIN     0
 #define BOARD_COL_1_PORT    DT_NODELABEL(gpiof)

@@ -1,13 +1,19 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <cJSON.h>
+#include <string.h>
 #include "board_manager.h"
 #include "mqtt_client.h"
 #include "robot_controller.h"
+#include "diagnostics.h"
 
 LOG_MODULE_REGISTER(application, LOG_LEVEL_INF);
 
 #define BOARD_SCAN_INTERVAL_MS 100
+
+/* ============================================================================
+ * Board event handlers
+ * ============================================================================ */
 
 static void on_move_detected(const board_move_t *move)
 {
@@ -35,7 +41,8 @@ static void on_move_detected(const board_move_t *move)
     if (payload) {
         int rc = app_mqtt_publish("chess/board/move", payload, strlen(payload));
         if (rc < 0) {
-            LOG_WRN("Failed to publish move (rc=%d) - MQTT connected: %s", rc, app_mqtt_is_connected() ? "yes" : "no");
+            LOG_WRN("Failed to publish move (rc=%d) - MQTT connected: %s", 
+                    rc, app_mqtt_is_connected() ? "yes" : "no");
         } else {
             LOG_INF("Published move to MQTT");
         }
@@ -47,7 +54,7 @@ static void on_move_detected(const board_move_t *move)
 
 static void on_state_changed(const chess_board_state_t *state)
 {
-    // Publish compact state (hex mask, move count, timestamp)
+    /* Publish compact state (hex mask, move count, timestamp) */
     cJSON *root = cJSON_CreateObject();
     if (!root) {
         LOG_ERR("Failed to create JSON object");
@@ -67,13 +74,14 @@ static void on_state_changed(const chess_board_state_t *state)
     if (payload) {
         int rc = app_mqtt_publish("chess/board/state", payload, strlen(payload));
         if (rc < 0) {
-            LOG_DBG("Failed to publish state (rc=%d) - MQTT connected: %s", rc, app_mqtt_is_connected() ? "yes" : "no");
+            LOG_DBG("Failed to publish state (rc=%d) - MQTT connected: %s", 
+                    rc, app_mqtt_is_connected() ? "yes" : "no");
         }
         cJSON_free(payload);
     }
     cJSON_Delete(root);
 
-    // Publish full board grid as array to chess/board/fullstate
+    /* Publish full board grid as array to chess/board/fullstate */
     cJSON *full = cJSON_CreateObject();
     if (!full) {
         LOG_ERR("Failed to create fullstate JSON object");
@@ -95,12 +103,17 @@ static void on_state_changed(const chess_board_state_t *state)
     if (full_payload) {
         int rc = app_mqtt_publish("chess/board/fullstate", full_payload, strlen(full_payload));
         if (rc < 0) {
-            LOG_DBG("Failed to publish fullstate (rc=%d) - MQTT connected: %s", rc, app_mqtt_is_connected() ? "yes" : "no");
+            LOG_DBG("Failed to publish fullstate (rc=%d) - MQTT connected: %s", 
+                    rc, app_mqtt_is_connected() ? "yes" : "no");
         }
         cJSON_free(full_payload);
     }
     cJSON_Delete(full);
 }
+
+/* ============================================================================
+ * System MQTT handlers
+ * ============================================================================ */
 
 static void on_ping_received(const char *topic, const uint8_t *payload, uint32_t payload_len)
 {
@@ -125,7 +138,8 @@ static void on_ping_received(const char *topic, const uint8_t *payload, uint32_t
     if (response) {
         int rc = app_mqtt_publish("chess/system/pong", response, strlen(response));
         if (rc < 0) {
-            LOG_WRN("Failed to publish pong (rc=%d) - MQTT connected: %s", rc, app_mqtt_is_connected() ? "yes" : "no");
+            LOG_WRN("Failed to publish pong (rc=%d) - MQTT connected: %s", 
+                    rc, app_mqtt_is_connected() ? "yes" : "no");
         } else {
             LOG_INF("Responded to ping");
         }
@@ -178,6 +192,10 @@ static void on_robot_command_received(const char *topic, const uint8_t *payload,
     cJSON_Delete(root);
 }
 
+/* ============================================================================
+ * Public API
+ * ============================================================================ */
+
 int application_init(void)
 {
     int ret;
@@ -193,8 +211,16 @@ int application_init(void)
     board_manager_register_move_callback(on_move_detected);
     board_manager_register_state_callback(on_state_changed);
 
+    /* System topics */
     app_mqtt_subscribe("chess/system/ping", on_ping_received);
     app_mqtt_subscribe("chess/robot/command", on_robot_command_received);
+
+    /* Initialize diagnostics module (stepper/servo debug topics) */
+    ret = diagnostics_init();
+    if (ret < 0) {
+        LOG_WRN("Failed to initialize diagnostics: %d", ret);
+        /* Non-fatal, continue without diagnostics */
+    }
 
     LOG_INF("Application initialized");
     return 0;
