@@ -1,29 +1,29 @@
 #ifndef STEPPER_CONFIG_H
 #define STEPPER_CONFIG_H
 
-// X-Axis Stepper: Relocated to PD pins (avoiding Ethernet PA1, PA2, PA7)
+// X-Axis Stepper
 #define STEPPER_X_PULSE_PORT DT_NODELABEL(gpiod)
-#define STEPPER_X_PULSE_PIN 2  // Previously PA0
+#define STEPPER_X_PULSE_PIN 2
 #define STEPPER_X_DIR_PORT DT_NODELABEL(gpiod)
-#define STEPPER_X_DIR_PIN 3    // Previously PA1 - CONFLICT with RMII_REF_CLK!
+#define STEPPER_X_DIR_PIN 3
 #define STEPPER_X_ENABLE_PORT DT_NODELABEL(gpiod)
-#define STEPPER_X_ENABLE_PIN 4  // Previously PA4
+#define STEPPER_X_ENABLE_PIN 4
 
-// Y-Axis Stepper: PB0-2 are safe (no Ethernet conflicts except PB13)
-#define STEPPER_Y_PULSE_PORT DT_NODELABEL(gpiob)
-#define STEPPER_Y_PULSE_PIN 3   // Previously PB0 - Changed to avoid potential issues
-#define STEPPER_Y_DIR_PORT DT_NODELABEL(gpiob)
-#define STEPPER_Y_DIR_PIN 4     // Previously PB1
-#define STEPPER_Y_ENABLE_PORT DT_NODELABEL(gpiob)
-#define STEPPER_Y_ENABLE_PIN 5  // Previously PB2
+// Y-Axis Stepper
+#define STEPPER_Y_PULSE_PORT DT_NODELABEL(gpiof)
+#define STEPPER_Y_PULSE_PIN 5
+#define STEPPER_Y_DIR_PORT DT_NODELABEL(gpiof)
+#define STEPPER_Y_DIR_PIN 4
+#define STEPPER_Y_ENABLE_PORT DT_NODELABEL(gpioe)
+#define STEPPER_Y_ENABLE_PIN 8
 
-// Z-Axis Stepper: Relocated to PD pins (avoiding Ethernet PC1, PC4, PC5)
+// Z-Axis Stepper
 #define STEPPER_Z_PULSE_PORT DT_NODELABEL(gpiod)
-#define STEPPER_Z_PULSE_PIN 5   // Previously PC0
+#define STEPPER_Z_PULSE_PIN 5
 #define STEPPER_Z_DIR_PORT DT_NODELABEL(gpiod)
-#define STEPPER_Z_DIR_PIN 6     // Previously PC1 - CONFLICT with RMII_MDC!
+#define STEPPER_Z_DIR_PIN 6
 #define STEPPER_Z_ENABLE_PORT DT_NODELABEL(gpiod)
-#define STEPPER_Z_ENABLE_PIN 7  // Previously PC2
+#define STEPPER_Z_ENABLE_PIN 7
 
 // Gripper Stepper: Relocated to PC pins that are safe
 #define STEPPER_GRIPPER_PULSE_PORT DT_NODELABEL(gpioc)
