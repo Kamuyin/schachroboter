@@ -21,7 +21,8 @@ static const char *stepper_id_to_name(stepper_id_t id)
 {
     switch (id) {
     case STEPPER_ID_X_AXIS:  return "x";
-    case STEPPER_ID_Y_AXIS:  return "y";
+    case STEPPER_ID_Y1_AXIS: return "y1";
+    case STEPPER_ID_Y2_AXIS: return "y2";
     case STEPPER_ID_Z_AXIS:  return "z";
     case STEPPER_ID_GRIPPER: return "gripper";
     default:                 return "unknown";
@@ -31,7 +32,8 @@ static const char *stepper_id_to_name(stepper_id_t id)
 static stepper_id_t stepper_name_to_id(const char *name)
 {
     if (strcmp(name, "x") == 0 || strcmp(name, "X") == 0) return STEPPER_ID_X_AXIS;
-    if (strcmp(name, "y") == 0 || strcmp(name, "Y") == 0) return STEPPER_ID_Y_AXIS;
+    if (strcmp(name, "y") == 0 || strcmp(name, "Y") == 0 || strcmp(name, "y1") == 0 || strcmp(name, "Y1") == 0) return STEPPER_ID_Y1_AXIS;
+    if (strcmp(name, "y2") == 0 || strcmp(name, "Y2") == 0) return STEPPER_ID_Y2_AXIS;
     if (strcmp(name, "z") == 0 || strcmp(name, "Z") == 0) return STEPPER_ID_Z_AXIS;
     if (strcmp(name, "gripper") == 0 || strcmp(name, "GRIPPER") == 0) return STEPPER_ID_GRIPPER;
     return STEPPER_ID_MAX; /* invalid */
@@ -86,6 +88,42 @@ static void on_diag_stepper_move(const char *topic, const uint8_t *payload, uint
         return;
     }
 
+    uint32_t speed_us = (speed && cJSON_IsNumber(speed)) ? (uint32_t)speed->valueint : STEPPER_DEFAULT_SPEED_US;
+    int32_t step_count = (int32_t)steps->valueint;
+
+    /* Special handling: "y" targets the dual-drive pair (y1 + y2) */
+    if (strcmp(motor_name->valuestring, "y") == 0 || strcmp(motor_name->valuestring, "Y") == 0) {
+        stepper_motor_t *y1 = stepper_manager_get_motor(STEPPER_ID_Y1_AXIS);
+        stepper_motor_t *y2 = stepper_manager_get_motor(STEPPER_ID_Y2_AXIS);
+        if (!y1 || !y2) {
+            publish_diag_response("chess/diag/stepper/response", "error", "Y pair not registered");
+            cJSON_Delete(root);
+            return;
+        }
+
+        int ret = stepper_motor_move_steps_sync(y1, y2, step_count, speed_us);
+        if (ret < 0) {
+            LOG_ERR("DIAG: Failed to move Y pair: %d", ret);
+            publish_diag_response("chess/diag/stepper/response", "error", "Move failed (check enable)");
+        } else {
+            LOG_INF("DIAG: Moving Y pair by %d steps at %u us/step", step_count, speed_us);
+            cJSON *resp = cJSON_CreateObject();
+            cJSON_AddStringToObject(resp, "status", "ok");
+            cJSON_AddStringToObject(resp, "motor", "y");
+            cJSON_AddNumberToObject(resp, "steps", step_count);
+            cJSON_AddNumberToObject(resp, "speed_us", speed_us);
+            cJSON_AddNumberToObject(resp, "timestamp", k_uptime_get_32());
+            char *resp_payload = cJSON_PrintUnformatted(resp);
+            if (resp_payload) {
+                app_mqtt_publish("chess/diag/stepper/response", resp_payload, strlen(resp_payload));
+                cJSON_free(resp_payload);
+            }
+            cJSON_Delete(resp);
+        }
+        cJSON_Delete(root);
+        return;
+    }
+
     stepper_id_t id = stepper_name_to_id(motor_name->valuestring);
     if (id >= STEPPER_ID_MAX) {
         LOG_ERR("DIAG: Unknown motor '%s'", motor_name->valuestring);
@@ -101,9 +139,6 @@ static void on_diag_stepper_move(const char *topic, const uint8_t *payload, uint
         cJSON_Delete(root);
         return;
     }
-
-    uint32_t speed_us = (speed && cJSON_IsNumber(speed)) ? (uint32_t)speed->valueint : STEPPER_DEFAULT_SPEED_US;
-    int32_t step_count = (int32_t)steps->valueint;
 
     int ret = stepper_motor_move_steps(motor, step_count, speed_us);
     if (ret < 0) {
@@ -154,6 +189,13 @@ static void on_diag_stepper_stop(const char *topic, const uint8_t *payload, uint
         stepper_manager_stop_all();
         LOG_INF("DIAG: Stopping all motors");
         publish_diag_response("chess/diag/stepper/response", "ok", "All motors stopped");
+    } else if (strcmp(motor_name->valuestring, "y") == 0 || strcmp(motor_name->valuestring, "Y") == 0) {
+        stepper_motor_t *y1 = stepper_manager_get_motor(STEPPER_ID_Y1_AXIS);
+        stepper_motor_t *y2 = stepper_manager_get_motor(STEPPER_ID_Y2_AXIS);
+        if (y1) stepper_motor_stop(y1);
+        if (y2) stepper_motor_stop(y2);
+        LOG_INF("DIAG: Stopped Y pair");
+        publish_diag_response("chess/diag/stepper/response", "ok", "Y pair stopped");
     } else {
         stepper_id_t id = stepper_name_to_id(motor_name->valuestring);
         if (id < STEPPER_ID_MAX) {
@@ -185,18 +227,36 @@ static void on_diag_stepper_status(const char *topic, const uint8_t *payload, ui
     cJSON *motor_name = root ? cJSON_GetObjectItem(root, "motor") : NULL;
 
     if (motor_name && cJSON_IsString(motor_name) && strcmp(motor_name->valuestring, "all") != 0) {
-        /* Single motor status */
-        stepper_id_t id = stepper_name_to_id(motor_name->valuestring);
-        stepper_motor_t *motor = (id < STEPPER_ID_MAX) ? stepper_manager_get_motor(id) : NULL;
-        
-        if (motor) {
-            cJSON_AddStringToObject(resp, "motor", motor_name->valuestring);
-            cJSON_AddNumberToObject(resp, "position", stepper_motor_get_position(motor));
-            cJSON_AddBoolToObject(resp, "moving", stepper_motor_is_moving(motor));
-            cJSON_AddNumberToObject(resp, "state", stepper_motor_get_state(motor));
+        /* Single motor or Y pair status */
+        if (strcmp(motor_name->valuestring, "y") == 0 || strcmp(motor_name->valuestring, "Y") == 0) {
+            stepper_motor_t *y1 = stepper_manager_get_motor(STEPPER_ID_Y1_AXIS);
+            stepper_motor_t *y2 = stepper_manager_get_motor(STEPPER_ID_Y2_AXIS);
+            cJSON *m = cJSON_CreateObject();
+            if (y1 && y2) {
+                cJSON_AddNumberToObject(m, "position_y1", stepper_motor_get_position(y1));
+                cJSON_AddNumberToObject(m, "position_y2", stepper_motor_get_position(y2));
+                cJSON_AddBoolToObject(m, "moving_y1", stepper_motor_is_moving(y1));
+                cJSON_AddBoolToObject(m, "moving_y2", stepper_motor_is_moving(y2));
+                cJSON_AddBoolToObject(m, "aligned", stepper_motor_get_position(y1) == stepper_motor_get_position(y2));
+            } else {
+                cJSON_AddStringToObject(m, "status", "error");
+                cJSON_AddStringToObject(m, "message", "Y pair not found");
+            }
+            cJSON_AddItemToObject(resp, "motor", cJSON_CreateString("y"));
+            cJSON_AddItemToObject(resp, "y_pair", m);
         } else {
-            cJSON_AddStringToObject(resp, "status", "error");
-            cJSON_AddStringToObject(resp, "message", "Motor not found");
+            stepper_id_t id = stepper_name_to_id(motor_name->valuestring);
+            stepper_motor_t *motor = (id < STEPPER_ID_MAX) ? stepper_manager_get_motor(id) : NULL;
+            
+            if (motor) {
+                cJSON_AddStringToObject(resp, "motor", motor_name->valuestring);
+                cJSON_AddNumberToObject(resp, "position", stepper_motor_get_position(motor));
+                cJSON_AddBoolToObject(resp, "moving", stepper_motor_is_moving(motor));
+                cJSON_AddNumberToObject(resp, "state", stepper_motor_get_state(motor));
+            } else {
+                cJSON_AddStringToObject(resp, "status", "error");
+                cJSON_AddStringToObject(resp, "message", "Motor not found");
+            }
         }
     } else {
         /* All motors status */
@@ -255,6 +315,18 @@ static void on_diag_stepper_enable(const char *topic, const uint8_t *payload, ui
             publish_diag_response("chess/diag/stepper/response", "ok", 
                                   en ? "All motors enabled" : "All motors disabled");
         }
+    } else if (strcmp(motor_name->valuestring, "y") == 0 || strcmp(motor_name->valuestring, "Y") == 0) {
+        stepper_motor_t *y1 = stepper_manager_get_motor(STEPPER_ID_Y1_AXIS);
+        stepper_motor_t *y2 = stepper_manager_get_motor(STEPPER_ID_Y2_AXIS);
+        int ret1 = y1 ? stepper_motor_enable(y1, en) : -ENODEV;
+        int ret2 = y2 ? stepper_motor_enable(y2, en) : -ENODEV;
+        if (ret1 < 0 || ret2 < 0) {
+            publish_diag_response("chess/diag/stepper/response", "error", "Enable Y pair failed");
+        } else {
+            LOG_INF("DIAG: %s Y pair", en ? "Enabled" : "Disabled");
+            publish_diag_response("chess/diag/stepper/response", "ok", 
+                                  en ? "Y pair enabled" : "Y pair disabled");
+        }
     } else {
         stepper_id_t id = stepper_name_to_id(motor_name->valuestring);
         stepper_motor_t *motor = (id < STEPPER_ID_MAX) ? stepper_manager_get_motor(id) : NULL;
@@ -291,6 +363,13 @@ static void on_diag_stepper_home(const char *topic, const uint8_t *payload, uint
         }
         LOG_INF("DIAG: Homed all motors (position = 0)");
         publish_diag_response("chess/diag/stepper/response", "ok", "All motors homed");
+    } else if (strcmp(motor_name->valuestring, "y") == 0 || strcmp(motor_name->valuestring, "Y") == 0) {
+        stepper_motor_t *y1 = stepper_manager_get_motor(STEPPER_ID_Y1_AXIS);
+        stepper_motor_t *y2 = stepper_manager_get_motor(STEPPER_ID_Y2_AXIS);
+        if (y1) stepper_motor_set_position(y1, 0);
+        if (y2) stepper_motor_set_position(y2, 0);
+        LOG_INF("DIAG: Homed Y pair (position = 0)");
+        publish_diag_response("chess/diag/stepper/response", "ok", "Y pair homed");
     } else {
         stepper_id_t id = stepper_name_to_id(motor_name->valuestring);
         stepper_motor_t *motor = (id < STEPPER_ID_MAX) ? stepper_manager_get_motor(id) : NULL;

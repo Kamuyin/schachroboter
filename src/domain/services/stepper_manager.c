@@ -58,11 +58,25 @@ void stepper_manager_update_all(void)
     if (!initialized) {
         return;
     }
-    
+
+    bool y_pair_handled = false;
+
     for (int i = 0; i < MAX_STEPPER_MOTORS; i++) {
-        if (motors[i]) {
-            stepper_motor_update(motors[i]);
+        if (!motors[i]) {
+            continue;
         }
+
+        if (!y_pair_handled && i == STEPPER_ID_Y1_AXIS && motors[STEPPER_ID_Y2_AXIS]) {
+            stepper_motor_update_pair(motors[STEPPER_ID_Y1_AXIS], motors[STEPPER_ID_Y2_AXIS]);
+            y_pair_handled = true;
+            continue;
+        }
+
+        if (y_pair_handled && i == STEPPER_ID_Y2_AXIS) {
+            continue; /* already updated as a pair */
+        }
+
+        stepper_motor_update(motors[i]);
     }
 }
 
