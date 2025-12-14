@@ -12,7 +12,8 @@
 LOG_MODULE_REGISTER(robot_controller, LOG_LEVEL_INF);
 
 static stepper_motor_t *motor_x = NULL;
-static stepper_motor_t *motor_y = NULL;
+static stepper_motor_t *motor_y1 = NULL;
+static stepper_motor_t *motor_y2 = NULL;
 static stepper_motor_t *motor_z = NULL;
 static stepper_motor_t *motor_gripper = NULL;
 
@@ -46,13 +47,23 @@ int robot_controller_init(void)
         return -ENOMEM;
     }
     
-    motor_y = stepper_motor_create(
-        DEVICE_DT_GET(STEPPER_Y_PULSE_PORT), STEPPER_Y_PULSE_PIN,
-        DEVICE_DT_GET(STEPPER_Y_DIR_PORT), STEPPER_Y_DIR_PIN,
-        DEVICE_DT_GET(STEPPER_Y_ENABLE_PORT), STEPPER_Y_ENABLE_PIN
+    motor_y1 = stepper_motor_create(
+        DEVICE_DT_GET(STEPPER_Y1_PULSE_PORT), STEPPER_Y1_PULSE_PIN,
+        DEVICE_DT_GET(STEPPER_Y1_DIR_PORT), STEPPER_Y1_DIR_PIN,
+        DEVICE_DT_GET(STEPPER_Y1_ENABLE_PORT), STEPPER_Y1_ENABLE_PIN
     );
-    if (!motor_y) {
-        LOG_ERR("Failed to create Y motor");
+    if (!motor_y1) {
+        LOG_ERR("Failed to create Y1 motor");
+        return -ENOMEM;
+    }
+
+    motor_y2 = stepper_motor_create(
+        DEVICE_DT_GET(STEPPER_Y2_PULSE_PORT), STEPPER_Y2_PULSE_PIN,
+        DEVICE_DT_GET(STEPPER_Y2_DIR_PORT), STEPPER_Y2_DIR_PIN,
+        DEVICE_DT_GET(STEPPER_Y2_ENABLE_PORT), STEPPER_Y2_ENABLE_PIN
+    );
+    if (!motor_y2) {
+        LOG_ERR("Failed to create Y2 motor");
         return -ENOMEM;
     }
     
@@ -83,12 +94,19 @@ int robot_controller_init(void)
     }
     stepper_motor_register_callback(motor_x, motor_move_complete);
     
-    ret = stepper_motor_init(motor_y);
+    ret = stepper_motor_init(motor_y1);
     if (ret < 0) {
-        LOG_ERR("Failed to initialize Y motor: %d", ret);
+        LOG_ERR("Failed to initialize Y1 motor: %d", ret);
         return ret;
     }
-    stepper_motor_register_callback(motor_y, motor_move_complete);
+    stepper_motor_register_callback(motor_y1, motor_move_complete);
+
+    ret = stepper_motor_init(motor_y2);
+    if (ret < 0) {
+        LOG_ERR("Failed to initialize Y2 motor: %d", ret);
+        return ret;
+    }
+    stepper_motor_register_callback(motor_y2, motor_move_complete);
     
     ret = stepper_motor_init(motor_z);
     if (ret < 0) {
@@ -105,7 +123,8 @@ int robot_controller_init(void)
     stepper_motor_register_callback(motor_gripper, motor_move_complete);
     
     stepper_manager_register_motor(STEPPER_ID_X_AXIS, motor_x);
-    stepper_manager_register_motor(STEPPER_ID_Y_AXIS, motor_y);
+    stepper_manager_register_motor(STEPPER_ID_Y1_AXIS, motor_y1);
+    stepper_manager_register_motor(STEPPER_ID_Y2_AXIS, motor_y2);
     stepper_manager_register_motor(STEPPER_ID_Z_AXIS, motor_z);
     stepper_manager_register_motor(STEPPER_ID_GRIPPER, motor_gripper);
     
@@ -169,12 +188,12 @@ int robot_controller_move_to(int32_t x, int32_t y, int32_t z, uint32_t speed_us)
 {
     int ret;
     
-    if (!motor_x || !motor_y || !motor_z) {
+    if (!motor_x || !motor_y1 || !motor_y2 || !motor_z) {
         return -EINVAL;
     }
     
     int32_t current_x = stepper_motor_get_position(motor_x);
-    int32_t current_y = stepper_motor_get_position(motor_y);
+    int32_t current_y = stepper_motor_get_position(motor_y1);
     int32_t current_z = stepper_motor_get_position(motor_z);
     
     int32_t steps_x = x - current_x;
@@ -189,7 +208,7 @@ int robot_controller_move_to(int32_t x, int32_t y, int32_t z, uint32_t speed_us)
     }
     
     if (steps_y != 0) {
-        ret = stepper_motor_move_steps(motor_y, steps_y, speed_us);
+        ret = stepper_motor_move_steps_sync(motor_y1, motor_y2, steps_y, speed_us);
         if (ret < 0) {
             return ret;
         }
@@ -208,12 +227,13 @@ int robot_controller_move_to(int32_t x, int32_t y, int32_t z, uint32_t speed_us)
 
 int robot_controller_home(void)
 {
-    if (!motor_x || !motor_y || !motor_z) {
+    if (!motor_x || !motor_y1 || !motor_y2 || !motor_z) {
         return -EINVAL;
     }
     
     stepper_motor_set_position(motor_x, 0);
-    stepper_motor_set_position(motor_y, 0);
+    stepper_motor_set_position(motor_y1, 0);
+    stepper_motor_set_position(motor_y2, 0);
     stepper_motor_set_position(motor_z, 0);
     
     LOG_INF("Homing complete");
@@ -272,8 +292,8 @@ robot_position_t robot_controller_get_position(void)
     if (motor_x) {
         pos.x = stepper_motor_get_position(motor_x);
     }
-    if (motor_y) {
-        pos.y = stepper_motor_get_position(motor_y);
+    if (motor_y1) {
+        pos.y = stepper_motor_get_position(motor_y1);
     }
     if (motor_z) {
         pos.z = stepper_motor_get_position(motor_z);
