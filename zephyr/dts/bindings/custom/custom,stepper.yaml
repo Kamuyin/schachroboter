@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/zephyrproject-rtos/zephyr/main/dts/bindings-schema.yaml
+
+title: Custom Stepper Motor Node
+
+description: |
+  GPIO stepper motor interface
+
+compatible: "custom,stepper"
+
+properties:
+  pulse-gpios:
+    type: phandle-array
+    required: true
+    description: GPIO spec for the step pulse output
+
+  dir-gpios:
+    type: phandle-array
+    required: true
+    description: GPIO spec for the direction output
+
+  enable-gpios:
+    type: phandle-array
+    required: false
+    description: Optional GPIO spec for the enable output (active high)
+
+  dir-inverted:
+    type: boolean
+    required: false
+    description: If present, logical direction is inverted
