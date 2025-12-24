@@ -11,10 +11,9 @@ LOG_MODULE_REGISTER(application, LOG_LEVEL_INF);
 
 #define BOARD_SCAN_INTERVAL_MS 100
 
-/* ============================================================================
- * Board event handlers
- * ============================================================================ */
-
+/*
+ * Event Handlers
+*/
 static void on_move_detected(const board_move_t *move)
 {
     cJSON *root = cJSON_CreateObject();
@@ -111,10 +110,9 @@ static void on_state_changed(const chess_board_state_t *state)
     cJSON_Delete(full);
 }
 
-/* ============================================================================
- * System MQTT handlers
- * ============================================================================ */
-
+/*
+ * MQTT Message Handlers
+*/
 static void on_ping_received(const char *topic, const uint8_t *payload, uint32_t payload_len)
 {
     cJSON *root = cJSON_CreateObject();
@@ -192,10 +190,6 @@ static void on_robot_command_received(const char *topic, const uint8_t *payload,
     cJSON_Delete(root);
 }
 
-/* ============================================================================
- * Public API
- * ============================================================================ */
-
 int application_init(void)
 {
     int ret;
@@ -211,15 +205,12 @@ int application_init(void)
     board_manager_register_move_callback(on_move_detected);
     board_manager_register_state_callback(on_state_changed);
 
-    /* System topics */
     app_mqtt_subscribe("chess/system/ping", on_ping_received);
     app_mqtt_subscribe("chess/robot/command", on_robot_command_received);
 
-    /* Initialize diagnostics module (stepper/servo debug topics) */
     ret = diagnostics_init();
     if (ret < 0) {
         LOG_WRN("Failed to initialize diagnostics: %d", ret);
-        /* Non-fatal, continue without diagnostics */
     }
 
     LOG_INF("Application initialized");

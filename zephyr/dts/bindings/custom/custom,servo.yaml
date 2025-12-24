@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/zephyrproject-rtos/zephyr/main/dts/bindings-schema.yaml
+
+title: Custom Servo Node
+
+description: |
+  Servo control interface via GPIO
+
+compatible: "custom,servo"
+
+properties:
+  control-gpios:
+    type: phandle-array
+    required: true
+    description: GPIO spec used to generate servo control pulses
