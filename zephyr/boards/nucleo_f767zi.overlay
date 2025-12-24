@@ -1,0 +1,104 @@
+/*
+ * DT overlay on NUCLEO-F767ZI
+ */
+
+/ {
+    aliases {
+        stepper-x = &stepper_x;
+        stepper-y1 = &stepper_y1;
+        stepper-y2 = &stepper_y2;
+        stepper-z = &stepper_z;
+        stepper-gripper = &stepper_gripper;
+        servo-1 = &servo_1;
+        servo-2 = &servo_2;
+        servo-3 = &servo_3;
+        servo-4 = &servo_4;
+        chess-board = &chess_board;
+    };
+
+    /* Stepper motors */
+    stepper_x: stepper-x {
+        compatible = "custom,stepper";
+        pulse-gpios = <&gpiod 15 GPIO_ACTIVE_HIGH>;
+        dir-gpios = <&gpiof 14 GPIO_ACTIVE_HIGH>;
+        enable-gpios = <&gpioe 9 GPIO_ACTIVE_HIGH>;
+        /* dir-inverted; */
+    };
+
+    stepper_y1: stepper-y1 {
+        compatible = "custom,stepper";
+        pulse-gpios = <&gpiof 5 GPIO_ACTIVE_HIGH>;
+        dir-gpios = <&gpiof 4 GPIO_ACTIVE_HIGH>;
+        enable-gpios = <&gpioe 8 GPIO_ACTIVE_HIGH>;
+    };
+
+    stepper_y2: stepper-y2 {
+        compatible = "custom,stepper";
+        pulse-gpios = <&gpiof 10 GPIO_ACTIVE_HIGH>;
+        dir-gpios = <&gpioe 7 GPIO_ACTIVE_HIGH>;
+        enable-gpios = <&gpiod 14 GPIO_ACTIVE_HIGH>;
+        /* dir-inverted; */
+    };
+
+    stepper_z: stepper-z {
+        compatible = "custom,stepper";
+        pulse-gpios = <&gpiod 5 GPIO_ACTIVE_HIGH>;
+        dir-gpios = <&gpiod 6 GPIO_ACTIVE_HIGH>;
+        enable-gpios = <&gpiod 7 GPIO_ACTIVE_HIGH>;
+    };
+
+    stepper_gripper: stepper-gripper {
+        compatible = "custom,stepper";
+        pulse-gpios = <&gpioc 6 GPIO_ACTIVE_HIGH>;
+        dir-gpios = <&gpioc 7 GPIO_ACTIVE_HIGH>;
+        enable-gpios = <&gpioc 8 GPIO_ACTIVE_HIGH>;
+    };
+
+    /* Servos */
+    servo_1: servo-1 {
+        compatible = "custom,servo";
+        control-gpios = <&gpioh 10 GPIO_ACTIVE_HIGH>;
+    };
+
+    servo_2: servo-2 {
+        compatible = "custom,servo";
+        control-gpios = <&gpioh 11 GPIO_ACTIVE_HIGH>;
+    };
+
+    servo_3: servo-3 {
+        compatible = "custom,servo";
+        control-gpios = <&gpioh 12 GPIO_ACTIVE_HIGH>;
+    };
+
+    servo_4: servo-4 {
+        compatible = "custom,servo";
+        control-gpios = <&gpioh 13 GPIO_ACTIVE_HIGH>;
+    };
+
+    /* Chess board matrix
+     * Pull-up and switch-active-high properties are optional; presence means true.
+     */
+    chess_board: chess-board {
+        compatible = "custom,chess-board-matrix";
+        row-gpios = <&gpiof 1 GPIO_ACTIVE_HIGH>,
+                    <&gpioe 4 GPIO_ACTIVE_HIGH>,
+                    <&gpiof 0 GPIO_ACTIVE_HIGH>,
+                    <&gpioe 5 GPIO_ACTIVE_HIGH>,
+                    <&gpiod 1 GPIO_ACTIVE_HIGH>,
+                    <&gpiof 2 GPIO_ACTIVE_HIGH>,
+                    <&gpiod 0 GPIO_ACTIVE_HIGH>,
+                    <&gpiof 8 GPIO_ACTIVE_HIGH>;
+
+        col-gpios = <&gpiog 0 GPIO_ACTIVE_HIGH>,
+                    <&gpiof 9 GPIO_ACTIVE_HIGH>,
+                    <&gpioe 1 GPIO_ACTIVE_HIGH>,
+                    <&gpiog 1 GPIO_ACTIVE_HIGH>,
+                    <&gpiog 9 GPIO_ACTIVE_HIGH>,
+                    <&gpioe 6 GPIO_ACTIVE_HIGH>,
+                    <&gpiog 12 GPIO_ACTIVE_HIGH>,
+                    <&gpiog 15 GPIO_ACTIVE_HIGH>;
+
+        pull-up;
+        switch-active-high;
+    };
+};

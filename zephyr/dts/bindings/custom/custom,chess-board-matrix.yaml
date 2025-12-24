@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/zephyrproject-rtos/zephyr/main/dts/bindings-schema.yaml
+
+title: Custom Chess Board Matrix Scanner
+
+description: |
+  GPIO matrix representing an 8x8 chess board. Rows are driven and
+  columns are sensed (or vice versa) by the application via GPIO API.
+
+compatible: "custom,chess-board-matrix"
+
+properties:
+  row-gpios:
+    type: phandle-array
+    required: true
+    description: GPIO specs for the 8 row lines (index is row number)
+
+  col-gpios:
+    type: phandle-array
+    required: true
+    description: GPIO specs for the 8 column lines (index is column number)
+
+  pull-up:
+    type: boolean
+    required: false
+    description: If present, columns have external pull-ups
+
+  switch-active-high:
+    type: boolean
+    required: false
+    description: If present, a closed switch reads as logic 1
