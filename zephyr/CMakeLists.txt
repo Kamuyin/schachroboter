@@ -1,8 +1,11 @@
 cmake_minimum_required(VERSION 3.13.1)
+
+set(DTS_ROOT "${CMAKE_CURRENT_LIST_DIR}")
+set(DTC_OVERLAY_FILE "${CMAKE_CURRENT_LIST_DIR}/boards/nucleo_f767zi.overlay")
+
 include($ENV{ZEPHYR_BASE}/cmake/app/boilerplate.cmake NO_POLICY_SCOPE)
 project(Schachroboter)
 
-# Collect all application sources recursively and include cJSON
 file(GLOB_RECURSE app_sources
 	 ../src/*.c
 	 ../src/*.cc
