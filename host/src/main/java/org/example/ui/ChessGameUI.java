@@ -17,6 +17,7 @@ import org.example.settings.MqttSettings;
 import org.example.settings.SettingsManager;
 import org.example.ui.settings.SettingsDialog;
 import org.example.ui.view.BoardView;
+import org.example.ui.view.DiagnosticsView;
 import org.example.ui.view.GameLogView;
 import org.example.ui.view.PlayerInfoView;
 import org.slf4j.Logger;
@@ -30,6 +31,7 @@ public class ChessGameUI {
     private final BoardView boardView;
     private final GameLogView gameLogView;
     private final PlayerInfoView playerInfoView;
+    private final DiagnosticsView diagnosticsView;
     private final org.example.ui.StatusBar statusBar;
     private final EngineController engineController;
     private final MqttBrokerService mqttBrokerService;
@@ -57,6 +59,7 @@ public class ChessGameUI {
         this.chessBoard = new ChessBoard();
         this.boardView = new BoardView(chessBoard, this::onMove);
         this.gameLogView = new GameLogView();
+        this.diagnosticsView = new DiagnosticsView();
         this.playerInfoView = new PlayerInfoView(chessBoard);
         this.statusBar = new org.example.ui.StatusBar(chessBoard);
     this.engineController = new EngineController(this::showEngineError);
@@ -97,6 +100,7 @@ public class ChessGameUI {
         stage.setOnCloseRequest(event -> {
             logger.info("Application close requested, shutting down services");
             engineController.shutdown();
+            diagnosticsView.shutdown();
             mqttBrokerService.shutdown();
         });
     }
@@ -247,7 +251,12 @@ public class ChessGameUI {
         settingsScroll.setFitToWidth(true);
         settingsTab.setContent(settingsScroll);
 
-        tabPane.getTabs().addAll(gameInfoTab, settingsTab);
+        // Diagnostics tab
+        Tab diagnosticsTab = new Tab("Diagnostics");
+        diagnosticsTab.setClosable(false);
+        diagnosticsTab.setContent(diagnosticsView.getView());
+
+        tabPane.getTabs().addAll(gameInfoTab, settingsTab, diagnosticsTab);
         return tabPane;
     }
 
