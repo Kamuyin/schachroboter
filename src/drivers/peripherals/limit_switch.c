@@ -11,6 +11,9 @@ LOG_MODULE_REGISTER(limit_switch, LOG_LEVEL_INF);
 /* Maximum motors that can be attached to a single limit switch */
 #define MAX_ATTACHED_MOTORS 2
 
+/* Debounce time in milliseconds to filter noise */
+#define DEBOUNCE_TIME_MS 50
+
 struct limit_switch {
     const struct device *out_port;
     gpio_pin_t out_pin;
@@ -31,6 +34,7 @@ struct limit_switch {
     
     /* State */
     volatile bool triggered_flag;
+    volatile uint32_t last_trigger_time;
     bool interrupt_enabled;
     bool initialized;
 };
@@ -111,10 +115,15 @@ static int init_switch_from_dt(limit_switch_id_t id,
         return ret;
     }
     
-    /* Initialize GPIO callback but keep interrupt DISABLED by default.
-     * Interrupts should only be enabled during homing to prevent
-     * false triggers from stopping motors during normal operation.
-     */
+    /* Configure interrupt on the appropriate edge */
+    gpio_flags_t int_flags = active_high ? GPIO_INT_EDGE_TO_ACTIVE : GPIO_INT_EDGE_TO_INACTIVE;
+    ret = gpio_pin_interrupt_configure(sw->in_port, sw->in_pin, int_flags);
+    if (ret < 0) {
+        LOG_ERR("Limit switch %d: Failed to configure interrupt: %d", id, ret);
+        return ret;
+    }
+    
+    /* Initialize GPIO callback */
     gpio_init_callback(&sw->gpio_cb, limit_switch_isr, BIT(sw->in_pin));
     ret = gpio_add_callback(sw->in_port, &sw->gpio_cb);
     if (ret < 0) {
@@ -122,13 +131,9 @@ static int init_switch_from_dt(limit_switch_id_t id,
         return ret;
     }
     
-    /* Keep interrupt disabled by default */
-    ret = gpio_pin_interrupt_configure(sw->in_port, sw->in_pin, GPIO_INT_DISABLE);
-    if (ret < 0) {
-        LOG_WRN("Limit switch %d: Failed to disable interrupt: %d", id, ret);
-    }
-    
-    sw->interrupt_enabled = false;
+    /* Enable interrupts by default for safety - debouncing in ISR handles noise */
+    sw->interrupt_enabled = true;
+    sw->last_trigger_time = 0;
     sw->initialized = true;
     
     LOG_INF("Limit switch %d initialized (active_high=%d)", id, active_high);
@@ -141,17 +146,27 @@ static void limit_switch_isr(const struct device *port, struct gpio_callback *cb
     for (int i = 0; i < LIMIT_SWITCH_MAX; i++) {
         struct limit_switch *sw = &switches[i];
         
-        if (!sw->initialized) {
+        if (!sw->initialized || !sw->interrupt_enabled) {
             continue;
         }
         
         if (sw->in_port == port && (pins & BIT(sw->in_pin))) {
-            /* Check if the switch is actually triggered (debounce check) */
+            uint32_t now = k_uptime_get_32();
+            
+            /* Debounce: ignore if triggered too recently */
+            if ((now - sw->last_trigger_time) < DEBOUNCE_TIME_MS) {
+                return;
+            }
+            
+            /* Verify the switch is actually triggered (read pin state) */
             int val = gpio_pin_get(sw->in_port, sw->in_pin);
             bool triggered = sw->active_high ? (val > 0) : (val == 0);
             
             if (triggered) {
+                sw->last_trigger_time = now;
                 sw->triggered_flag = true;
+                
+                LOG_WRN("Limit switch %d triggered - emergency stop!", i);
                 
                 /* Emergency stop all attached motors immediately */
                 for (int m = 0; m < sw->motor_count; m++) {
