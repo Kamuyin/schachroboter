@@ -15,9 +15,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Comparator;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.stream.Stream;
 
 public class MqttBrokerService {
     private static final Logger logger = LoggerFactory.getLogger(MqttBrokerService.class);
@@ -32,6 +34,8 @@ public class MqttBrokerService {
     private static final String PROP_WS_ENABLED = "websocket_enabled";
     private static final String PROP_WS_PORT = "websocket_port";
     private static final String PROP_WS_PATH = "websocket_path";
+    private static final String PROP_PERSISTENT_CLIENT_EXPIRATION = "persistent_client_expiration";
+    private static final String DEFAULT_EXPIRATION_SECONDS = Integer.MAX_VALUE + "s";
 
     public enum BrokerChange {
         STARTED,
@@ -93,20 +97,8 @@ public class MqttBrokerService {
 
     private void startInternal(MqttSettings settings) {
         logger.info("Starting MQTT broker on {}:{}", settings.getHost(), settings.getPort());
-        try {
-            Properties props = buildProperties(settings);
-            IConfig config = new MemoryConfig(props);
-            server = new Server();
-            IAuthenticator authenticator = settings.isAllowAnonymous() ? null : buildAuthenticator(settings);
-            server.startServer(config, Collections.<InterceptHandler>emptyList(), null, authenticator, new PermitAllAuthorizatorPolicy());
-            running = true;
-            runtimeInfo = new RuntimeInfo(settings.getHost(), settings.getPort(), settings.isWebsocketEnabled(), settings.getWebsocketPort());
-            logger.info("MQTT broker started successfully");
-        } catch (Exception ex) {
-            logger.error("Failed to start MQTT broker", ex);
-            stopInternal();
-            throw new IllegalStateException("Failed to start MQTT broker: " + ex.getMessage(), ex);
-        }
+        Path brokerDir = resolveBrokerDataPath();
+        tryStart(settings, brokerDir, false);
     }
 
     private void stopInternal() {
@@ -125,18 +117,18 @@ public class MqttBrokerService {
         cachedSettings = null;
     }
 
-    private Properties buildProperties(MqttSettings settings) throws IOException {
+    Properties buildProperties(MqttSettings settings, Path brokerDir) throws IOException {
         Properties props = new Properties();
-    props.setProperty(PROP_PORT, String.valueOf(settings.getPort()));
-    props.setProperty(PROP_HOST, settings.getHost());
-    props.setProperty(PROP_ALLOW_ANONYMOUS, String.valueOf(settings.isAllowAnonymous()));
-    props.setProperty(PROP_NEED_CLIENT_AUTH, String.valueOf(!settings.isAllowAnonymous()));
+        props.setProperty(PROP_PORT, String.valueOf(settings.getPort()));
+        props.setProperty(PROP_HOST, settings.getHost());
+        props.setProperty(PROP_ALLOW_ANONYMOUS, String.valueOf(settings.isAllowAnonymous()));
+        props.setProperty(PROP_NEED_CLIENT_AUTH, String.valueOf(!settings.isAllowAnonymous()));
 
-        Path brokerDir = Paths.get(System.getProperty("user.home"), ".schachroboter", "mqtt");
         Files.createDirectories(brokerDir);
-    String normalizedDataPath = brokerDir.toString().replace("\\", "/");
-    props.setProperty(PROP_DATA_PATH, normalizedDataPath);
-    props.setProperty(PROP_PERSISTENCE_ENABLED, Boolean.TRUE.toString());
+        String normalizedDataPath = brokerDir.toString().replace("\\", "/");
+        props.setProperty(PROP_DATA_PATH, normalizedDataPath);
+        props.setProperty(PROP_PERSISTENCE_ENABLED, Boolean.TRUE.toString());
+        props.setProperty(PROP_PERSISTENT_CLIENT_EXPIRATION, DEFAULT_EXPIRATION_SECONDS);
 
         if (settings.isWebsocketEnabled()) {
             props.setProperty(PROP_WS_ENABLED, Boolean.TRUE.toString());
@@ -164,5 +156,61 @@ public class MqttBrokerService {
             String providedPassword = password == null ? "" : new String(password, StandardCharsets.UTF_8);
             return Objects.equals(expectedPassword, providedPassword);
         };
+    }
+
+    private void tryStart(MqttSettings settings, Path brokerDir, boolean alreadyPurged) {
+        try {
+            Properties props = buildProperties(settings, brokerDir);
+            IConfig config = new MemoryConfig(props);
+            server = new Server();
+            IAuthenticator authenticator = settings.isAllowAnonymous() ? null : buildAuthenticator(settings);
+            server.startServer(config, Collections.<InterceptHandler>emptyList(), null, authenticator, new PermitAllAuthorizatorPolicy());
+            running = true;
+            runtimeInfo = new RuntimeInfo(settings.getHost(), settings.getPort(), settings.isWebsocketEnabled(), settings.getWebsocketPort());
+            logger.info("MQTT broker started successfully");
+        } catch (Exception ex) {
+            if (!alreadyPurged && isMissingExpiryException(ex)) {
+                logger.warn("Broker start failed due to stale session data missing expiry; purging {} and retrying once", brokerDir);
+                purgeDirectorySilently(brokerDir);
+                tryStart(settings, brokerDir, true);
+                return;
+            }
+            logger.error("Failed to start MQTT broker", ex);
+            stopInternal();
+            throw new IllegalStateException("Failed to start MQTT broker: " + ex.getMessage(), ex);
+        }
+    }
+
+    private Path resolveBrokerDataPath() {
+        return Paths.get(System.getProperty("user.home"), ".schachroboter", "mqtt");
+    }
+
+    boolean isMissingExpiryException(Throwable throwable) {
+        Throwable cursor = throwable;
+        while (cursor != null) {
+            String message = cursor.getMessage();
+            if (message != null && message.contains("without expiry instant")) {
+                return true;
+            }
+            cursor = cursor.getCause();
+        }
+        return false;
+    }
+
+    private void purgeDirectorySilently(Path dir) {
+        if (dir == null || !Files.exists(dir)) {
+            return;
+        }
+        try (Stream<Path> walk = Files.walk(dir)) {
+            walk.sorted(Comparator.reverseOrder()).forEach(path -> {
+                try {
+                    Files.deleteIfExists(path);
+                } catch (IOException e) {
+                    logger.warn("Failed to delete {} while purging MQTT store", path, e);
+                }
+            });
+        } catch (IOException e) {
+            logger.warn("Unable to purge MQTT persistence folder {}", dir, e);
+        }
     }
 }
