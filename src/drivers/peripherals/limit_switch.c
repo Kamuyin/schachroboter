@@ -111,15 +111,10 @@ static int init_switch_from_dt(limit_switch_id_t id,
         return ret;
     }
     
-    /* Configure interrupt on the appropriate edge */
-    gpio_flags_t int_flags = active_high ? GPIO_INT_EDGE_TO_ACTIVE : GPIO_INT_EDGE_TO_INACTIVE;
-    ret = gpio_pin_interrupt_configure(sw->in_port, sw->in_pin, int_flags);
-    if (ret < 0) {
-        LOG_ERR("Limit switch %d: Failed to configure interrupt: %d", id, ret);
-        return ret;
-    }
-    
-    /* Initialize GPIO callback */
+    /* Initialize GPIO callback but keep interrupt DISABLED by default.
+     * Interrupts should only be enabled during homing to prevent
+     * false triggers from stopping motors during normal operation.
+     */
     gpio_init_callback(&sw->gpio_cb, limit_switch_isr, BIT(sw->in_pin));
     ret = gpio_add_callback(sw->in_port, &sw->gpio_cb);
     if (ret < 0) {
@@ -127,7 +122,13 @@ static int init_switch_from_dt(limit_switch_id_t id,
         return ret;
     }
     
-    sw->interrupt_enabled = true;
+    /* Keep interrupt disabled by default */
+    ret = gpio_pin_interrupt_configure(sw->in_port, sw->in_pin, GPIO_INT_DISABLE);
+    if (ret < 0) {
+        LOG_WRN("Limit switch %d: Failed to disable interrupt: %d", id, ret);
+    }
+    
+    sw->interrupt_enabled = false;
     sw->initialized = true;
     
     LOG_INF("Limit switch %d initialized (active_high=%d)", id, active_high);
