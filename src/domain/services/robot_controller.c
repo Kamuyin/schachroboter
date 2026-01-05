@@ -323,7 +323,6 @@ int robot_controller_home_axis(char axis)
             return -ENODEV;
         }
         limit_switch_clear_triggered(limit_x);
-        limit_switch_enable_interrupt(limit_x, true);  /* Enable interrupt for homing */
         ret = stepper_motor_start_homing(motor_x, HOMING_DIR_X, HOMING_SPEED_US);
         if (ret == 0) {
             LOG_INF("X-axis homing started");
@@ -340,7 +339,6 @@ int robot_controller_home_axis(char axis)
             return -ENODEV;
         }
         limit_switch_clear_triggered(limit_y);
-        limit_switch_enable_interrupt(limit_y, true);  /* Enable interrupt for homing */
         ret = stepper_motor_start_homing_sync(motor_y1, motor_y2, HOMING_DIR_Y, HOMING_SPEED_US);
         if (ret == 0) {
             LOG_INF("Y-axis homing started");
@@ -357,7 +355,6 @@ int robot_controller_home_axis(char axis)
             return -ENODEV;
         }
         limit_switch_clear_triggered(limit_z);
-        limit_switch_enable_interrupt(limit_z, true);  /* Enable interrupt for homing */
         ret = stepper_motor_start_homing(motor_z, HOMING_DIR_Z, HOMING_SPEED_US);
         if (ret == 0) {
             LOG_INF("Z-axis homing started");
@@ -491,7 +488,6 @@ void robot_controller_update(void)
     if (homing_state == HOMING_STATE_Z) {
         /* Check if Z homing complete (limit switch triggered and motor stopped) */
         if (limit_z && limit_switch_was_triggered(limit_z) && !stepper_motor_is_homing(motor_z)) {
-            limit_switch_enable_interrupt(limit_z, false);  /* Disable interrupt after homing */
             LOG_INF("Z-axis homed, starting Y-axis");
             homing_state = HOMING_STATE_Y;
             if (robot_controller_home_axis('y') < 0) {
@@ -502,7 +498,6 @@ void robot_controller_update(void)
         /* Check if Y homing complete */
         if (limit_y && limit_switch_was_triggered(limit_y) && 
             !stepper_motor_is_homing(motor_y1) && !stepper_motor_is_homing(motor_y2)) {
-            limit_switch_enable_interrupt(limit_y, false);  /* Disable interrupt after homing */
             LOG_INF("Y-axis homed, starting X-axis");
             homing_state = HOMING_STATE_X;
             if (robot_controller_home_axis('x') < 0) {
@@ -512,7 +507,6 @@ void robot_controller_update(void)
     } else if (homing_state == HOMING_STATE_X) {
         /* Check if X homing complete */
         if (limit_x && limit_switch_was_triggered(limit_x) && !stepper_motor_is_homing(motor_x)) {
-            limit_switch_enable_interrupt(limit_x, false);  /* Disable interrupt after homing */
             LOG_INF("X-axis homed - All axes homed successfully!");
             homing_state = HOMING_STATE_COMPLETE;
         }
