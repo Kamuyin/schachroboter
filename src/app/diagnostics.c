@@ -350,7 +350,7 @@ static void on_diag_stepper_enable(const char *topic, const uint8_t *payload, ui
 
 static void on_diag_stepper_home(const char *topic, const uint8_t *payload, uint32_t payload_len)
 {
-    /* Expected JSON: {"motor": "x"} or {"motor": "all"} - sets current position as 0 */
+    /* Expected JSON: {"motor": "x"} or {"motor": "all"} - sets current position as 0 (no physical movement) */
     cJSON *root = cJSON_ParseWithLength((const char *)payload, payload_len);
     cJSON *motor_name = root ? cJSON_GetObjectItem(root, "motor") : NULL;
 
@@ -361,29 +361,114 @@ static void on_diag_stepper_home(const char *topic, const uint8_t *payload, uint
                 stepper_motor_set_position(motor, 0);
             }
         }
-        LOG_INF("DIAG: Homed all motors (position = 0)");
-        publish_diag_response("chess/diag/stepper/response", "ok", "All motors homed");
+        LOG_INF("DIAG: Zeroed all motor positions");
+        publish_diag_response("chess/diag/stepper/response", "ok", "All motor positions zeroed");
     } else if (strcmp(motor_name->valuestring, "y") == 0 || strcmp(motor_name->valuestring, "Y") == 0) {
         stepper_motor_t *y1 = stepper_manager_get_motor(STEPPER_ID_Y1_AXIS);
         stepper_motor_t *y2 = stepper_manager_get_motor(STEPPER_ID_Y2_AXIS);
         if (y1) stepper_motor_set_position(y1, 0);
         if (y2) stepper_motor_set_position(y2, 0);
-        LOG_INF("DIAG: Homed Y pair (position = 0)");
-        publish_diag_response("chess/diag/stepper/response", "ok", "Y pair homed");
+        LOG_INF("DIAG: Zeroed Y pair positions");
+        publish_diag_response("chess/diag/stepper/response", "ok", "Y pair positions zeroed");
     } else {
         stepper_id_t id = stepper_name_to_id(motor_name->valuestring);
         stepper_motor_t *motor = (id < STEPPER_ID_MAX) ? stepper_manager_get_motor(id) : NULL;
         
         if (motor) {
             stepper_motor_set_position(motor, 0);
-            LOG_INF("DIAG: Homed motor %s (position = 0)", motor_name->valuestring);
-            publish_diag_response("chess/diag/stepper/response", "ok", "Motor homed");
+            LOG_INF("DIAG: Zeroed motor %s position", motor_name->valuestring);
+            publish_diag_response("chess/diag/stepper/response", "ok", "Motor position zeroed");
         } else {
             publish_diag_response("chess/diag/stepper/response", "error", "Motor not found");
         }
     }
 
     if (root) cJSON_Delete(root);
+}
+
+/* ============================================================================
+ * Homing and limit switch diagnostics handlers
+ * ============================================================================ */
+
+static void on_diag_homing_start(const char *topic, const uint8_t *payload, uint32_t payload_len)
+{
+    /* Expected JSON: {"axis": "x"} or {"axis": "all"} - starts physical homing with limit switches */
+    cJSON *root = cJSON_ParseWithLength((const char *)payload, payload_len);
+    cJSON *axis_name = root ? cJSON_GetObjectItem(root, "axis") : NULL;
+    int ret;
+
+    if (!axis_name || !cJSON_IsString(axis_name) || strcmp(axis_name->valuestring, "all") == 0) {
+        ret = robot_controller_home_all();
+        if (ret < 0) {
+            LOG_ERR("DIAG: Failed to start homing all axes: %d", ret);
+            publish_diag_response("chess/diag/homing/response", "error", "Failed to start homing");
+        } else {
+            LOG_INF("DIAG: Started homing all axes");
+            publish_diag_response("chess/diag/homing/response", "ok", "Homing started (Z -> Y -> X)");
+        }
+    } else {
+        char axis = axis_name->valuestring[0];
+        ret = robot_controller_home_axis(axis);
+        if (ret < 0) {
+            LOG_ERR("DIAG: Failed to start homing axis %c: %d", axis, ret);
+            publish_diag_response("chess/diag/homing/response", "error", "Failed to start homing axis");
+        } else {
+            LOG_INF("DIAG: Started homing axis %c", axis);
+            
+            cJSON *resp = cJSON_CreateObject();
+            cJSON_AddStringToObject(resp, "status", "ok");
+            cJSON_AddStringToObject(resp, "axis", axis_name->valuestring);
+            cJSON_AddStringToObject(resp, "message", "Homing started");
+            cJSON_AddNumberToObject(resp, "timestamp", k_uptime_get_32());
+            char *resp_payload = cJSON_PrintUnformatted(resp);
+            if (resp_payload) {
+                app_mqtt_publish("chess/diag/homing/response", resp_payload, strlen(resp_payload));
+                cJSON_free(resp_payload);
+            }
+            cJSON_Delete(resp);
+        }
+    }
+
+    if (root) cJSON_Delete(root);
+}
+
+static void on_diag_homing_status(const char *topic, const uint8_t *payload, uint32_t payload_len)
+{
+    /* Returns current homing state and limit switch status */
+    cJSON *resp = cJSON_CreateObject();
+    if (!resp) return;
+
+    cJSON_AddStringToObject(resp, "type", "homing_status");
+    cJSON_AddNumberToObject(resp, "timestamp", k_uptime_get_32());
+    
+    /* Homing state */
+    homing_state_t state = robot_controller_get_homing_state();
+    const char *state_str;
+    switch (state) {
+        case HOMING_STATE_IDLE: state_str = "idle"; break;
+        case HOMING_STATE_X: state_str = "homing_x"; break;
+        case HOMING_STATE_Y: state_str = "homing_y"; break;
+        case HOMING_STATE_Z: state_str = "homing_z"; break;
+        case HOMING_STATE_COMPLETE: state_str = "complete"; break;
+        case HOMING_STATE_ERROR: state_str = "error"; break;
+        default: state_str = "unknown"; break;
+    }
+    cJSON_AddStringToObject(resp, "homing_state", state_str);
+    cJSON_AddBoolToObject(resp, "is_homing", robot_controller_is_homing());
+    
+    /* Limit switch status */
+    cJSON *limits = cJSON_CreateObject();
+    cJSON_AddBoolToObject(limits, "x_triggered", robot_controller_limit_switch_triggered('x'));
+    cJSON_AddBoolToObject(limits, "y_triggered", robot_controller_limit_switch_triggered('y'));
+    cJSON_AddBoolToObject(limits, "z_triggered", robot_controller_limit_switch_triggered('z'));
+    cJSON_AddItemToObject(resp, "limit_switches", limits);
+
+    char *resp_payload = cJSON_PrintUnformatted(resp);
+    if (resp_payload) {
+        app_mqtt_publish("chess/diag/homing/response", resp_payload, strlen(resp_payload));
+        cJSON_free(resp_payload);
+    }
+    cJSON_Delete(resp);
 }
 
 /* ============================================================================
@@ -490,6 +575,10 @@ int diagnostics_init(void)
     app_mqtt_subscribe("chess/diag/stepper/status", on_diag_stepper_status);
     app_mqtt_subscribe("chess/diag/stepper/enable", on_diag_stepper_enable);
     app_mqtt_subscribe("chess/diag/stepper/home", on_diag_stepper_home);
+
+    /* Homing diagnostics (physical homing with limit switches) */
+    app_mqtt_subscribe("chess/diag/homing/start", on_diag_homing_start);
+    app_mqtt_subscribe("chess/diag/homing/status", on_diag_homing_status);
 
     /* Servo diagnostics */
     app_mqtt_subscribe("chess/diag/servo/set", on_diag_servo_set);
