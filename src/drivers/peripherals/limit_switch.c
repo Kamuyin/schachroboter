@@ -11,15 +11,6 @@ LOG_MODULE_REGISTER(limit_switch, LOG_LEVEL_INF);
 /* Maximum motors that can be attached to a single limit switch */
 #define MAX_ATTACHED_MOTORS 2
 
-/* Debounce time in milliseconds to filter noise */
-#define DEBOUNCE_TIME_MS 100
-
-/* Number of consecutive stable reads required to confirm trigger (EMI filter) */
-#define CONFIRM_READ_COUNT 5
-
-/* Delay between confirmation reads in microseconds */
-#define CONFIRM_READ_DELAY_US 500
-
 struct limit_switch {
     const struct device *out_port;
     gpio_pin_t out_pin;
@@ -40,7 +31,6 @@ struct limit_switch {
     
     /* State */
     volatile bool triggered_flag;
-    volatile uint32_t last_trigger_time;
     bool interrupt_enabled;
     bool initialized;
 };
@@ -137,9 +127,7 @@ static int init_switch_from_dt(limit_switch_id_t id,
         return ret;
     }
     
-    /* Enable interrupts by default for safety - debouncing in ISR handles noise */
     sw->interrupt_enabled = true;
-    sw->last_trigger_time = 0;
     sw->initialized = true;
     
     LOG_INF("Limit switch %d initialized (active_high=%d)", id, active_high);
@@ -152,45 +140,17 @@ static void limit_switch_isr(const struct device *port, struct gpio_callback *cb
     for (int i = 0; i < LIMIT_SWITCH_MAX; i++) {
         struct limit_switch *sw = &switches[i];
         
-        if (!sw->initialized || !sw->interrupt_enabled) {
+        if (!sw->initialized) {
             continue;
         }
         
         if (sw->in_port == port && (pins & BIT(sw->in_pin))) {
-            uint32_t now = k_uptime_get_32();
+            /* Check if the switch is actually triggered (debounce check) */
+            int val = gpio_pin_get(sw->in_port, sw->in_pin);
+            bool triggered = sw->active_high ? (val > 0) : (val == 0);
             
-            /* Debounce: ignore if triggered too recently */
-            if ((now - sw->last_trigger_time) < DEBOUNCE_TIME_MS) {
-                return;
-            }
-            
-            /* EMI Filter: Require multiple consecutive reads showing triggered state.
-             * This filters out transient spikes induced by stepper motor noise.
-             * A real switch press will hold the state stable.
-             */
-            int confirmed_count = 0;
-            for (int r = 0; r < CONFIRM_READ_COUNT; r++) {
-                int val = gpio_pin_get(sw->in_port, sw->in_pin);
-                bool triggered = sw->active_high ? (val > 0) : (val == 0);
-                
-                if (triggered) {
-                    confirmed_count++;
-                } else {
-                    /* State changed - this was noise, not a real trigger */
-                    break;
-                }
-                
-                if (r < CONFIRM_READ_COUNT - 1) {
-                    k_busy_wait(CONFIRM_READ_DELAY_US);
-                }
-            }
-            
-            /* Only trigger if ALL reads confirmed the switch is pressed */
-            if (confirmed_count == CONFIRM_READ_COUNT) {
-                sw->last_trigger_time = now;
+            if (triggered) {
                 sw->triggered_flag = true;
-                
-                LOG_WRN("Limit switch %d triggered - emergency stop!", i);
                 
                 /* Emergency stop all attached motors immediately */
                 for (int m = 0; m < sw->motor_count; m++) {
