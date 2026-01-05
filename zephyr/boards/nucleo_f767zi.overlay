@@ -14,6 +14,9 @@
         servo-3 = &servo_3;
         servo-4 = &servo_4;
         chess-board = &chess_board;
+        limit-switch-x = &limit_switch_x;
+        limit-switch-y = &limit_switch_y;
+        limit-switch-z = &limit_switch_z;
     };
 
     /* Stepper motors */
@@ -100,5 +103,31 @@
 
         pull-up;
         switch-active-high;
+    };
+
+    /* Limit switches for homing (rolling lever type, Normally Open)
+     * OUT pins supply VCC to the switch, IN pins read the state.
+     * When switch is pressed, OUT connects to IN -> IN reads HIGH.
+     * Using pull-down on IN pins so unpressed = LOW, pressed = HIGH.
+     */
+    limit_switch_x: limit-switch-x {
+        compatible = "custom,limit-switch";
+        out-gpios = <&gpioe 13 GPIO_ACTIVE_HIGH>;  /* PE13 - power/signal out */
+        in-gpios = <&gpiof 13 GPIO_ACTIVE_HIGH>;   /* PF13 - read input */
+        active-high;  /* Triggered when IN reads HIGH */
+    };
+
+    limit_switch_y: limit-switch-y {
+        compatible = "custom,limit-switch";
+        out-gpios = <&gpioe 14 GPIO_ACTIVE_HIGH>;  /* PE14 - power/signal out */
+        in-gpios = <&gpioe 15 GPIO_ACTIVE_HIGH>;   /* PE15 - read input (single switch for Y1 & Y2) */
+        active-high;
+    };
+
+    limit_switch_z: limit-switch-z {
+        compatible = "custom,limit-switch";
+        out-gpios = <&gpiof 12 GPIO_ACTIVE_HIGH>;  /* PF12 - power/signal out */
+        in-gpios = <&gpiog 14 GPIO_ACTIVE_HIGH>;   /* PG14 - read input */
+        active-high;
     };
 };
