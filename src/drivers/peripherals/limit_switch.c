@@ -12,7 +12,13 @@ LOG_MODULE_REGISTER(limit_switch, LOG_LEVEL_INF);
 #define MAX_ATTACHED_MOTORS 2
 
 /* Debounce time in milliseconds to filter noise */
-#define DEBOUNCE_TIME_MS 50
+#define DEBOUNCE_TIME_MS 100
+
+/* Number of consecutive stable reads required to confirm trigger (EMI filter) */
+#define CONFIRM_READ_COUNT 5
+
+/* Delay between confirmation reads in microseconds */
+#define CONFIRM_READ_DELAY_US 500
 
 struct limit_switch {
     const struct device *out_port;
@@ -158,11 +164,29 @@ static void limit_switch_isr(const struct device *port, struct gpio_callback *cb
                 return;
             }
             
-            /* Verify the switch is actually triggered (read pin state) */
-            int val = gpio_pin_get(sw->in_port, sw->in_pin);
-            bool triggered = sw->active_high ? (val > 0) : (val == 0);
+            /* EMI Filter: Require multiple consecutive reads showing triggered state.
+             * This filters out transient spikes induced by stepper motor noise.
+             * A real switch press will hold the state stable.
+             */
+            int confirmed_count = 0;
+            for (int r = 0; r < CONFIRM_READ_COUNT; r++) {
+                int val = gpio_pin_get(sw->in_port, sw->in_pin);
+                bool triggered = sw->active_high ? (val > 0) : (val == 0);
+                
+                if (triggered) {
+                    confirmed_count++;
+                } else {
+                    /* State changed - this was noise, not a real trigger */
+                    break;
+                }
+                
+                if (r < CONFIRM_READ_COUNT - 1) {
+                    k_busy_wait(CONFIRM_READ_DELAY_US);
+                }
+            }
             
-            if (triggered) {
+            /* Only trigger if ALL reads confirmed the switch is pressed */
+            if (confirmed_count == CONFIRM_READ_COUNT) {
                 sw->last_trigger_time = now;
                 sw->triggered_flag = true;
                 
