@@ -252,11 +252,13 @@ void stepper_motor_set_direction_inverted(stepper_motor_t *motor, bool inverted)
 
 void stepper_motor_update(stepper_motor_t *motor)
 {
-	if (!motor || motor->state != STEPPER_STATE_MOVING) {
+	if (!motor || (motor->state != STEPPER_STATE_MOVING && motor->state != STEPPER_STATE_HOMING)) {
 		return;
 	}
     
-	if (motor->current_position == motor->target_position) {
+	/* For regular moves, check if target reached */
+	if (motor->state == STEPPER_STATE_MOVING && 
+	    motor->current_position == motor->target_position) {
 		motor->state = STEPPER_STATE_IDLE;
 		if (motor->callback) {
 			motor->callback(motor);
@@ -264,6 +266,8 @@ void stepper_motor_update(stepper_motor_t *motor)
 		return;
 	}
     
+	/* For homing, we continue indefinitely until emergency_stop is called */
+	
 	uint64_t now = now_us();
 	if (now < motor->next_step_time) {
 		return;
@@ -293,20 +297,24 @@ void stepper_motor_update_pair(stepper_motor_t *motor_a, stepper_motor_t *motor_
 		return;
 	}
 
-	bool both_moving = (motor_a->state == STEPPER_STATE_MOVING) && (motor_b->state == STEPPER_STATE_MOVING);
+	bool both_active = ((motor_a->state == STEPPER_STATE_MOVING || motor_a->state == STEPPER_STATE_HOMING) &&
+	                    (motor_b->state == STEPPER_STATE_MOVING || motor_b->state == STEPPER_STATE_HOMING));
 
-	if (both_moving &&
-		motor_a->target_position == motor_b->target_position &&
+	if (both_active &&
 		motor_a->current_position == motor_b->current_position &&
 		motor_a->step_delay_us == motor_b->step_delay_us) {
 
-		if (motor_a->current_position == motor_a->target_position) {
+		/* For regular moves, check if target reached */
+		if (motor_a->state == STEPPER_STATE_MOVING && 
+		    motor_a->current_position == motor_a->target_position) {
 			motor_a->state = STEPPER_STATE_IDLE;
 			motor_b->state = STEPPER_STATE_IDLE;
 			if (motor_a->callback) motor_a->callback(motor_a);
 			if (motor_b->callback && motor_b->callback != motor_a->callback) motor_b->callback(motor_b);
 			return;
 		}
+
+		/* For homing, continue until emergency_stop is called */
 
 		uint64_t now = now_us();
 		if (now < motor_a->next_step_time) {
@@ -335,4 +343,85 @@ void stepper_motor_update_pair(stepper_motor_t *motor_a, stepper_motor_t *motor_
 
 	stepper_motor_update(motor_a);
 	stepper_motor_update(motor_b);
+}
+
+/* ============================================================================
+ * Emergency stop and homing functions
+ * ============================================================================ */
+
+void stepper_motor_emergency_stop(stepper_motor_t *motor)
+{
+	if (!motor) {
+		return;
+	}
+	
+	/* Immediately halt - safe to call from ISR */
+	motor->target_position = motor->current_position;
+	motor->state = STEPPER_STATE_IDLE;
+	
+	/* Note: We don't call the callback here since we're in ISR context
+	 * The motor position will be set to 0 (home) by the caller after this
+	 */
+}
+
+int stepper_motor_start_homing(stepper_motor_t *motor, stepper_direction_t direction, uint32_t step_delay_us)
+{
+	if (!motor) {
+		return -EINVAL;
+	}
+	
+	if (!motor->enabled) {
+		LOG_WRN("Cannot home motor while disabled");
+		return -EACCES;
+	}
+	
+	motor->direction = direction;
+	motor->step_delay_us = step_delay_us;
+	motor->state = STEPPER_STATE_HOMING;
+	motor->next_step_time = now_us();
+	
+	/* Set direction pin */
+	gpio_pin_set(motor->dir_port, motor->dir_pin, direction ^ motor->dir_inverted);
+	
+	LOG_INF("Motor homing started (dir=%d, speed=%u us)", direction, step_delay_us);
+	return 0;
+}
+
+int stepper_motor_start_homing_sync(stepper_motor_t *motor_a, stepper_motor_t *motor_b,
+                                    stepper_direction_t direction, uint32_t step_delay_us)
+{
+	if (!motor_a || !motor_b) {
+		return -EINVAL;
+	}
+	
+	if (!motor_a->enabled || !motor_b->enabled) {
+		LOG_WRN("Cannot home motors while disabled (Y dual)");
+		return -EACCES;
+	}
+	
+	uint64_t now = now_us();
+	
+	motor_a->direction = direction;
+	motor_b->direction = direction;
+	
+	motor_a->step_delay_us = step_delay_us;
+	motor_b->step_delay_us = step_delay_us;
+	
+	motor_a->state = STEPPER_STATE_HOMING;
+	motor_b->state = STEPPER_STATE_HOMING;
+	
+	motor_a->next_step_time = now;
+	motor_b->next_step_time = now;
+	
+	/* Set direction pins */
+	gpio_pin_set(motor_a->dir_port, motor_a->dir_pin, direction ^ motor_a->dir_inverted);
+	gpio_pin_set(motor_b->dir_port, motor_b->dir_pin, direction ^ motor_b->dir_inverted);
+	
+	LOG_INF("Y-axis homing started (dir=%d, speed=%u us)", direction, step_delay_us);
+	return 0;
+}
+
+bool stepper_motor_is_homing(const stepper_motor_t *motor)
+{
+	return motor && motor->state == STEPPER_STATE_HOMING;
 }
