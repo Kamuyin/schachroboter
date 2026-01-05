@@ -3,5 +3,6 @@
         "gpio_matrix.h": "c",
         "gpio.h": "c"
     },
-    "cmake.ignoreCMakeListsMissing": true
+    "cmake.ignoreCMakeListsMissing": true,
+    "java.configuration.updateBuildConfiguration": "automatic"
 }
