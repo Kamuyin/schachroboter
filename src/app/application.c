@@ -53,7 +53,6 @@ static void on_move_detected(const board_move_t *move)
 
 static void on_state_changed(const chess_board_state_t *state)
 {
-    /* Publish compact state (hex mask, move count, timestamp) */
     cJSON *root = cJSON_CreateObject();
     if (!root) {
         LOG_ERR("Failed to create JSON object");
@@ -80,7 +79,6 @@ static void on_state_changed(const chess_board_state_t *state)
     }
     cJSON_Delete(root);
 
-    /* Publish full board grid as array to chess/board/fullstate */
     cJSON *full = cJSON_CreateObject();
     if (!full) {
         LOG_ERR("Failed to create fullstate JSON object");
