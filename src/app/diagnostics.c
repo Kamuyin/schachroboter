@@ -13,10 +13,6 @@
 
 LOG_MODULE_REGISTER(diagnostics, LOG_LEVEL_INF);
 
-/* ============================================================================
- * Helper functions
- * ============================================================================ */
-
 static const char *stepper_id_to_name(stepper_id_t id)
 {
     switch (id) {
@@ -56,10 +52,6 @@ static void publish_diag_response(const char *topic, const char *status, const c
     cJSON_Delete(root);
 }
 
-/* ============================================================================
- * Stepper diagnostics handlers
- * ============================================================================ */
-
 static void on_diag_stepper_move(const char *topic, const uint8_t *payload, uint32_t payload_len)
 {
     /* Expected JSON: {"motor": "x", "steps": 200, "speed": 1000} */
@@ -91,7 +83,6 @@ static void on_diag_stepper_move(const char *topic, const uint8_t *payload, uint
     uint32_t speed_us = (speed && cJSON_IsNumber(speed)) ? (uint32_t)speed->valueint : STEPPER_DEFAULT_SPEED_US;
     int32_t step_count = (int32_t)steps->valueint;
 
-    /* Special handling: "y" targets the dual-drive pair (y1 + y2) */
     if (strcmp(motor_name->valuestring, "y") == 0 || strcmp(motor_name->valuestring, "Y") == 0) {
         stepper_motor_t *y1 = stepper_manager_get_motor(STEPPER_ID_Y1_AXIS);
         stepper_motor_t *y2 = stepper_manager_get_motor(STEPPER_ID_Y2_AXIS);
@@ -167,7 +158,6 @@ static void on_diag_stepper_move(const char *topic, const uint8_t *payload, uint
 
 static void on_diag_stepper_stop(const char *topic, const uint8_t *payload, uint32_t payload_len)
 {
-    /* Expected JSON: {"motor": "x"} or {"motor": "all"} */
     cJSON *root = cJSON_ParseWithLength((const char *)payload, payload_len);
     if (!root) {
         stepper_manager_stop_all();
@@ -213,7 +203,6 @@ static void on_diag_stepper_stop(const char *topic, const uint8_t *payload, uint
 
 static void on_diag_stepper_status(const char *topic, const uint8_t *payload, uint32_t payload_len)
 {
-    /* Expected JSON: {"motor": "x"} or {} for all motors */
     cJSON *root = cJSON_ParseWithLength((const char *)payload, payload_len);
     cJSON *resp = cJSON_CreateObject();
     if (!resp) {
@@ -259,7 +248,6 @@ static void on_diag_stepper_status(const char *topic, const uint8_t *payload, ui
             }
         }
     } else {
-        /* All motors status */
         cJSON *motors = cJSON_CreateObject();
         for (int i = 0; i < STEPPER_ID_MAX; i++) {
             stepper_motor_t *motor = stepper_manager_get_motor(i);
@@ -286,7 +274,6 @@ static void on_diag_stepper_status(const char *topic, const uint8_t *payload, ui
 
 static void on_diag_stepper_enable(const char *topic, const uint8_t *payload, uint32_t payload_len)
 {
-    /* Expected JSON: {"motor": "x", "enable": true} or {"motor": "all", "enable": true} */
     cJSON *root = cJSON_ParseWithLength((const char *)payload, payload_len);
     if (!root) {
         LOG_ERR("DIAG: Failed to parse stepper enable JSON");
@@ -350,7 +337,6 @@ static void on_diag_stepper_enable(const char *topic, const uint8_t *payload, ui
 
 static void on_diag_stepper_home(const char *topic, const uint8_t *payload, uint32_t payload_len)
 {
-    /* Expected JSON: {"motor": "x"} or {"motor": "all"} - sets current position as 0 (no physical movement) */
     cJSON *root = cJSON_ParseWithLength((const char *)payload, payload_len);
     cJSON *motor_name = root ? cJSON_GetObjectItem(root, "motor") : NULL;
 
@@ -386,13 +372,8 @@ static void on_diag_stepper_home(const char *topic, const uint8_t *payload, uint
     if (root) cJSON_Delete(root);
 }
 
-/* ============================================================================
- * Homing and limit switch diagnostics handlers
- * ============================================================================ */
-
 static void on_diag_homing_start(const char *topic, const uint8_t *payload, uint32_t payload_len)
 {
-    /* Expected JSON: {"axis": "x"} or {"axis": "all"} - starts physical homing with limit switches */
     cJSON *root = cJSON_ParseWithLength((const char *)payload, payload_len);
     cJSON *axis_name = root ? cJSON_GetObjectItem(root, "axis") : NULL;
     int ret;
@@ -434,14 +415,12 @@ static void on_diag_homing_start(const char *topic, const uint8_t *payload, uint
 
 static void on_diag_homing_status(const char *topic, const uint8_t *payload, uint32_t payload_len)
 {
-    /* Returns current homing state and limit switch status */
     cJSON *resp = cJSON_CreateObject();
     if (!resp) return;
 
     cJSON_AddStringToObject(resp, "type", "homing_status");
     cJSON_AddNumberToObject(resp, "timestamp", k_uptime_get_32());
     
-    /* Homing state */
     homing_state_t state = robot_controller_get_homing_state();
     const char *state_str;
     switch (state) {
@@ -456,7 +435,6 @@ static void on_diag_homing_status(const char *topic, const uint8_t *payload, uin
     cJSON_AddStringToObject(resp, "homing_state", state_str);
     cJSON_AddBoolToObject(resp, "is_homing", robot_controller_is_homing());
     
-    /* Limit switch status */
     cJSON *limits = cJSON_CreateObject();
     cJSON_AddBoolToObject(limits, "x_triggered", robot_controller_limit_switch_triggered('x'));
     cJSON_AddBoolToObject(limits, "y_triggered", robot_controller_limit_switch_triggered('y'));
@@ -471,13 +449,8 @@ static void on_diag_homing_status(const char *topic, const uint8_t *payload, uin
     cJSON_Delete(resp);
 }
 
-/* ============================================================================
- * Servo diagnostics handlers
- * ============================================================================ */
-
 static void on_diag_servo_set(const char *topic, const uint8_t *payload, uint32_t payload_len)
 {
-    /* Expected JSON: {"servo": 1, "angle": 90} */
     cJSON *root = cJSON_ParseWithLength((const char *)payload, payload_len);
     if (!root) {
         LOG_ERR("DIAG: Failed to parse servo set JSON");
@@ -525,7 +498,6 @@ static void on_diag_servo_set(const char *topic, const uint8_t *payload, uint32_
 
 static void on_diag_servo_enable(const char *topic, const uint8_t *payload, uint32_t payload_len)
 {
-    /* Expected JSON: {"servo": 1, "enable": true} */
     cJSON *root = cJSON_ParseWithLength((const char *)payload, payload_len);
     if (!root) {
         LOG_ERR("DIAG: Failed to parse servo enable JSON");
@@ -561,10 +533,6 @@ static void on_diag_servo_enable(const char *topic, const uint8_t *payload, uint
     cJSON_Delete(root);
 }
 
-/* ============================================================================
- * Public API
- * ============================================================================ */
-
 int diagnostics_init(void)
 {
     LOG_INF("Initializing diagnostics module");
@@ -576,7 +544,7 @@ int diagnostics_init(void)
     app_mqtt_subscribe("chess/diag/stepper/enable", on_diag_stepper_enable);
     app_mqtt_subscribe("chess/diag/stepper/home", on_diag_stepper_home);
 
-    /* Homing diagnostics (physical homing with limit switches) */
+    /* Homing diagnostics */
     app_mqtt_subscribe("chess/diag/homing/start", on_diag_homing_start);
     app_mqtt_subscribe("chess/diag/homing/status", on_diag_homing_status);
 

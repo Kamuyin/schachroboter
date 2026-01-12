@@ -12,9 +12,7 @@
 #define MQTT_BROKER_PORT 1883
 #define MQTT_CLIENT_ID "controller"
 
-/* Optional: static fallback if mDNS/DNS-SD discovery fails
-	Uncomment and set to the broker IPv4 address to force a last-resort connect.
-	Example: "192.168.1.100" */
+/* Optional: static fallback if mDNS/DNS-SD discovery fails */
 // #define MQTT_BROKER_STATIC_IP ""
 
 #define DHCP_THREAD_STACK_SIZE 2048
