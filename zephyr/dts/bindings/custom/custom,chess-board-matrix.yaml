@@ -2,6 +2,10 @@
 
 title: Custom Chess Board Matrix Scanner
 
+description: |
+  GPIO matrix representing an 8x8 chess board. Rows are driven and
+  columns are sensed (or vice versa) by the application via GPIO API.
+
 compatible: "custom,chess-board-matrix"
 
 properties:
