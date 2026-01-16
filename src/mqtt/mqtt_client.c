@@ -263,9 +263,10 @@ void mqtt_client_thread(void *p1, void *p2, void *p3)
 
         LOG_INF("MQTT connection established (CONNACK received)");
 
+        // Subscribe to all registered topics now that we're connected
         subscribe_to_topics();
 
-        // Online status public
+        /* Publish online status to help verify connectivity */
         {
             char buf[96];
             int len = snprintk(buf, sizeof(buf), "{\"status\":\"online\",\"timestamp\":%u}", k_uptime_get_32());

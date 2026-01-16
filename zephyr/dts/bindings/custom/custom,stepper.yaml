@@ -1,51 +1,29 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/zephyrproject-rtos/zephyr/main/dts/bindings-schema.yaml
 
-title: Custom Stepper Motor Node with PWM Pulse Generation
+title: Custom Stepper Motor Node
+
+description: |
+  GPIO stepper motor interface
 
 compatible: "custom,stepper"
 
 properties:
-  pwms:
+  pulse-gpios:
     type: phandle-array
     required: true
-    description: |
-      PWM phandle and channel for step pulse generation.
-      Format: <&pwm_device channel period_ns>
-      The period is used as the default/initial value and can be
-      overridden at runtime for speed control.
+    description: GPIO spec for the step pulse output
 
   dir-gpios:
     type: phandle-array
     required: true
-    description: GPIO for direction control (1 = CW, 0 = CCW)
+    description: GPIO spec for the direction output
 
   enable-gpios:
     type: phandle-array
     required: false
-    description: |
-      GPIO for driver enable. TB6600 drivers typically use
-      active-low enable (LOW = enabled, HIGH = disabled).
+    description: Optional GPIO spec for the enable output (active high)
 
   dir-inverted:
     type: boolean
     required: false
-    description: If present, inverts the direction signal logic
-
-  steps-per-rev:
-    type: int
-    required: false
-    default: 200
-    description: |
-      Steps per revolution (full steps). Common values:
-      - 200 for 1.8° motors
-      - 400 for 0.9° motors
-      Note: Microstepping multiplier is applied separately.
-
-  max-speed-hz:
-    type: int
-    required: false
-    default: 5000
-    description: |
-      Maximum step rate in Hz. This limits the PWM frequency
-      to prevent missed steps. TB6600 typically supports up to
-      ~20 kHz but mechanical limits are usually lower.
+    description: If present, logical direction is inverted

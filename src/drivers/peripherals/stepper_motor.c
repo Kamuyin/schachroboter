@@ -256,6 +256,7 @@ void stepper_motor_update(stepper_motor_t *motor)
 		return;
 	}
     
+	/* For regular moves, check if target reached */
 	if (motor->state == STEPPER_STATE_MOVING && 
 	    motor->current_position == motor->target_position) {
 		motor->state = STEPPER_STATE_IDLE;
@@ -265,6 +266,7 @@ void stepper_motor_update(stepper_motor_t *motor)
 		return;
 	}
     
+	/* For homing, we continue indefinitely until emergency_stop is called */
 	
 	uint64_t now = now_us();
 	if (now < motor->next_step_time) {
@@ -302,6 +304,7 @@ void stepper_motor_update_pair(stepper_motor_t *motor_a, stepper_motor_t *motor_
 		motor_a->current_position == motor_b->current_position &&
 		motor_a->step_delay_us == motor_b->step_delay_us) {
 
+		/* For regular moves, check if target reached */
 		if (motor_a->state == STEPPER_STATE_MOVING && 
 		    motor_a->current_position == motor_a->target_position) {
 			motor_a->state = STEPPER_STATE_IDLE;
@@ -311,6 +314,7 @@ void stepper_motor_update_pair(stepper_motor_t *motor_a, stepper_motor_t *motor_
 			return;
 		}
 
+		/* For homing, continue until emergency_stop is called */
 
 		uint64_t now = now_us();
 		if (now < motor_a->next_step_time) {
@@ -341,16 +345,23 @@ void stepper_motor_update_pair(stepper_motor_t *motor_a, stepper_motor_t *motor_
 	stepper_motor_update(motor_b);
 }
 
+/* ============================================================================
+ * Emergency stop and homing functions
+ * ============================================================================ */
+
 void stepper_motor_emergency_stop(stepper_motor_t *motor)
 {
 	if (!motor) {
 		return;
 	}
 	
-	//Cal ISR
+	/* Immediately halt - safe to call from ISR */
 	motor->target_position = motor->current_position;
 	motor->state = STEPPER_STATE_IDLE;
 	
+	/* Note: We don't call the callback here since we're in ISR context
+	 * The motor position will be set to 0 (home) by the caller after this
+	 */
 }
 
 int stepper_motor_start_homing(stepper_motor_t *motor, stepper_direction_t direction, uint32_t step_delay_us)
@@ -369,6 +380,7 @@ int stepper_motor_start_homing(stepper_motor_t *motor, stepper_direction_t direc
 	motor->state = STEPPER_STATE_HOMING;
 	motor->next_step_time = now_us();
 	
+	/* Set direction pin */
 	gpio_pin_set(motor->dir_port, motor->dir_pin, direction ^ motor->dir_inverted);
 	
 	LOG_INF("Motor homing started (dir=%d, speed=%u us)", direction, step_delay_us);
