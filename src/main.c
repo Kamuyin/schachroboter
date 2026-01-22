@@ -28,33 +28,39 @@ int main(void)
         return ret;
     }
 
+    LOG_DBG("Waiting for interface to be ready...");
     k_sleep(K_MSEC(500));
 
 
+    LOG_DBG("Configuring static IP address...");
     ret = network_configure_static_ip();
     if (ret < 0) {
         LOG_ERR("Static IP configuration failed: %d", ret);
         return ret;
     }
 
+    LOG_DBG("Starting DHCP server...");
     ret = dhcp_server_init();
     if (ret < 0) {
         LOG_ERR("DHCP server initialization failed: %d", ret);
         return ret;
     }
 
+    LOG_DBG("Initializing MQTT client...");
     ret = app_mqtt_init();
     if (ret < 0) {
         LOG_ERR("MQTT client initialization failed: %d", ret);
         return ret;
     }
 
+    LOG_DBG("Initializing robot controller...");
     ret = robot_controller_init();
     if (ret < 0) {
         LOG_ERR("Robot controller initialization failed: %d", ret);
         return ret;
     }
 
+    LOG_DBG("Initializing application...");
     ret = application_init();
     if (ret < 0) {
         LOG_ERR("Application initialization failed: %d", ret);

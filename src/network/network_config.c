@@ -58,12 +58,15 @@ int network_init(void)
 
     LOG_INF("Network interface initialized");
     LOG_INF("Interface index: %d", net_if_get_by_iface(iface));
+    LOG_INF("Interface up before bringing up: %s", net_if_is_up(iface) ? "yes" : "no");
     
+    // Bring the interface up
     net_if_up(iface);
     LOG_INF("Interface brought up");
     
+    // Wait for carrier/link detection (PHY link up)
     LOG_INF("Waiting for carrier detection...");
-    int retries = 50;
+    int retries = 50; // 5 seconds max
     while (retries-- > 0) {
         if (net_if_is_carrier_ok(iface)) {
             LOG_INF("Carrier detected!");
@@ -76,8 +79,13 @@ int network_init(void)
         LOG_WRN("No carrier detected - is cable plugged in?");
     }
     
+    LOG_INF("Interface up after bringing up: %s", net_if_is_up(iface) ? "yes" : "no");
+    LOG_INF("Carrier present: %s", net_if_is_carrier_ok(iface) ? "yes" : "no");
+    
+    // Initialize carrier monitoring state
     carrier_was_ok = net_if_is_carrier_ok(iface);
     
+    // Start carrier monitoring thread
     k_thread_create(&carrier_monitor_thread, carrier_monitor_stack,
                     K_THREAD_STACK_SIZEOF(carrier_monitor_stack),
                     carrier_monitor_fn, NULL, NULL, NULL,
@@ -124,7 +132,9 @@ int network_configure_static_ip(void)
 
     LOG_INF("Static IP configured: %s", STATIC_IPV4_ADDR);
     
-    // Wait to settle
+    // Give the network stack time to process the IP configuration
+    // and ensure Ethernet TX/RX is fully operational
+    LOG_INF("Waiting for network stack to stabilize...");
     k_sleep(K_MSEC(2000));
 
     return 0;

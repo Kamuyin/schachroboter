@@ -8,6 +8,7 @@
 
 LOG_MODULE_REGISTER(limit_switch, LOG_LEVEL_INF);
 
+/* Maximum motors that can be attached to a single limit switch */
 #define MAX_ATTACHED_MOTORS 2
 
 struct limit_switch {
@@ -17,23 +18,30 @@ struct limit_switch {
     gpio_pin_t in_pin;
     bool active_high;
     
+    /* Attached motors for emergency stop */
     stepper_motor_t *motors[MAX_ATTACHED_MOTORS];
     uint8_t motor_count;
     
+    /* Callback */
     limit_switch_callback_t callback;
     void *user_data;
     
+    /* GPIO callback for interrupt */
     struct gpio_callback gpio_cb;
     
+    /* State */
     volatile bool triggered_flag;
     bool interrupt_enabled;
     bool initialized;
 };
 
+/* Static storage for limit switches */
 static struct limit_switch switches[LIMIT_SWITCH_MAX];
 
+/* Forward declaration of ISR handler */
 static void limit_switch_isr(const struct device *port, struct gpio_callback *cb, uint32_t pins);
 
+/* Device tree node check macros */
 #define LIMIT_SWITCH_X_NODE DT_NODELABEL(limit_switch_x)
 #define LIMIT_SWITCH_Y_NODE DT_NODELABEL(limit_switch_y)
 #define LIMIT_SWITCH_Z_NODE DT_NODELABEL(limit_switch_z)
@@ -76,6 +84,7 @@ static int init_switch_from_dt(limit_switch_id_t id,
     sw->in_pin = in_pin;
     sw->active_high = active_high;
     
+    /* Check devices are ready */
     if (!device_is_ready(sw->out_port)) {
         LOG_ERR("Limit switch %d: OUT port not ready", id);
         return -ENODEV;
@@ -86,18 +95,23 @@ static int init_switch_from_dt(limit_switch_id_t id,
         return -ENODEV;
     }
     
+    /* Configure OUT pin as output, set HIGH to power the switch */
     ret = gpio_pin_configure(sw->out_port, sw->out_pin, GPIO_OUTPUT_HIGH);
     if (ret < 0) {
         LOG_ERR("Limit switch %d: Failed to configure OUT pin: %d", id, ret);
         return ret;
     }
     
+    /* Configure IN pin as input with pull-down
+     * For NO switch: unpressed = open = pulled LOW, pressed = connected to OUT = HIGH
+     */
     ret = gpio_pin_configure(sw->in_port, sw->in_pin, GPIO_INPUT | GPIO_PULL_DOWN);
     if (ret < 0) {
         LOG_ERR("Limit switch %d: Failed to configure IN pin: %d", id, ret);
         return ret;
     }
     
+    /* Configure interrupt on the appropriate edge */
     gpio_flags_t int_flags = active_high ? GPIO_INT_EDGE_TO_ACTIVE : GPIO_INT_EDGE_TO_INACTIVE;
     ret = gpio_pin_interrupt_configure(sw->in_port, sw->in_pin, int_flags);
     if (ret < 0) {
@@ -105,6 +119,7 @@ static int init_switch_from_dt(limit_switch_id_t id,
         return ret;
     }
     
+    /* Initialize GPIO callback */
     gpio_init_callback(&sw->gpio_cb, limit_switch_isr, BIT(sw->in_pin));
     ret = gpio_add_callback(sw->in_port, &sw->gpio_cb);
     if (ret < 0) {
@@ -121,6 +136,7 @@ static int init_switch_from_dt(limit_switch_id_t id,
 
 static void limit_switch_isr(const struct device *port, struct gpio_callback *cb, uint32_t pins)
 {
+    /* Find which switch triggered */
     for (int i = 0; i < LIMIT_SWITCH_MAX; i++) {
         struct limit_switch *sw = &switches[i];
         
@@ -129,18 +145,21 @@ static void limit_switch_isr(const struct device *port, struct gpio_callback *cb
         }
         
         if (sw->in_port == port && (pins & BIT(sw->in_pin))) {
+            /* Check if the switch is actually triggered (debounce check) */
             int val = gpio_pin_get(sw->in_port, sw->in_pin);
             bool triggered = sw->active_high ? (val > 0) : (val == 0);
             
             if (triggered) {
                 sw->triggered_flag = true;
                 
+                /* Emergency stop all attached motors immediately */
                 for (int m = 0; m < sw->motor_count; m++) {
                     if (sw->motors[m]) {
                         stepper_motor_emergency_stop(sw->motors[m]);
                     }
                 }
                 
+                /* Invoke user callback if registered */
                 if (sw->callback) {
                     sw->callback(sw, sw->user_data);
                 }
@@ -251,6 +270,7 @@ int limit_switch_attach_motor(limit_switch_t *sw, stepper_motor_t *motor)
 
 int limit_switch_attach_motor_secondary(limit_switch_t *sw, stepper_motor_t *motor)
 {
+    /* Same as attach_motor, just clearer semantics for Y-axis dual motor */
     return limit_switch_attach_motor(sw, motor);
 }
 

@@ -12,7 +12,8 @@
 
 LOG_MODULE_REGISTER(robot_controller, LOG_LEVEL_INF);
 
-#define HOMING_SPEED_US      2000
+/* Homing configuration */
+#define HOMING_SPEED_US      2000  /* Slower speed for homing (safety) */
 #define HOMING_DIR_X         STEPPER_DIR_CCW  /* Direction towards X home switch */
 #define HOMING_DIR_Y         STEPPER_DIR_CCW  /* Direction towards Y home switch */
 #define HOMING_DIR_Z         STEPPER_DIR_CCW  /* Direction towards Z home switch */
@@ -36,6 +37,7 @@ static limit_switch_t *limit_z = NULL;
 /* Homing state */
 static volatile homing_state_t homing_state = HOMING_STATE_IDLE;
 
+/* Limit switch callbacks - called from ISR context */
 static void on_limit_x_triggered(limit_switch_t *sw, void *user_data)
 {
     LOG_INF("X limit switch triggered - motor stopped, position zeroed");
@@ -167,14 +169,17 @@ int robot_controller_init(void)
         return ret;
     }
     
+    /* Initialize limit switches */
     ret = limit_switch_init();
     if (ret < 0) {
         LOG_WRN("Failed to initialize limit switches: %d (homing may not work)", ret);
     } else {
+        /* Get limit switch instances */
         limit_x = limit_switch_get(LIMIT_SWITCH_X);
         limit_y = limit_switch_get(LIMIT_SWITCH_Y);
         limit_z = limit_switch_get(LIMIT_SWITCH_Z);
         
+        /* Attach motors to limit switches for automatic emergency stop */
         if (limit_x) {
             limit_switch_attach_motor(limit_x, motor_x);
             limit_switch_register_callback(limit_x, on_limit_x_triggered, NULL);
@@ -182,6 +187,7 @@ int robot_controller_init(void)
         }
         
         if (limit_y) {
+            /* Y-axis has dual motors sharing one limit switch */
             limit_switch_attach_motor(limit_y, motor_y1);
             limit_switch_attach_motor_secondary(limit_y, motor_y2);
             limit_switch_register_callback(limit_y, on_limit_y_triggered, NULL);
@@ -288,6 +294,7 @@ int robot_controller_move_to(int32_t x, int32_t y, int32_t z, uint32_t speed_us)
 
 int robot_controller_home(void)
 {
+    /* Legacy function - just zeroes positions without using limit switches */
     if (!motor_x || !motor_y1 || !motor_y2 || !motor_z) {
         return -EINVAL;
     }
@@ -477,7 +484,9 @@ void robot_controller_update(void)
     if (servo_3) servo_motor_update(servo_3);
     if (servo_4) servo_motor_update(servo_4);
     
+    /* Handle homing state machine */
     if (homing_state == HOMING_STATE_Z) {
+        /* Check if Z homing complete (limit switch triggered and motor stopped) */
         if (limit_z && limit_switch_was_triggered(limit_z) && !stepper_motor_is_homing(motor_z)) {
             LOG_INF("Z-axis homed, starting Y-axis");
             homing_state = HOMING_STATE_Y;
@@ -486,6 +495,7 @@ void robot_controller_update(void)
             }
         }
     } else if (homing_state == HOMING_STATE_Y) {
+        /* Check if Y homing complete */
         if (limit_y && limit_switch_was_triggered(limit_y) && 
             !stepper_motor_is_homing(motor_y1) && !stepper_motor_is_homing(motor_y2)) {
             LOG_INF("Y-axis homed, starting X-axis");
@@ -495,6 +505,7 @@ void robot_controller_update(void)
             }
         }
     } else if (homing_state == HOMING_STATE_X) {
+        /* Check if X homing complete */
         if (limit_x && limit_switch_was_triggered(limit_x) && !stepper_motor_is_homing(motor_x)) {
             LOG_INF("X-axis homed - All axes homed successfully!");
             homing_state = HOMING_STATE_COMPLETE;

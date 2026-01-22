@@ -1,75 +1,6 @@
-#include <zephyr/dt-bindings/pwm/pwm.h>
-
-&timers1 {
-    status = "okay";
-    st,prescaler = <215>;  /* 216 MHz / 216 = 1 MHz timer clock */
-
-    pwm1: pwm {
-        status = "okay";
-        pinctrl-0 = <&tim1_ch2_pe11>;
-        pinctrl-names = "default";
-    };
-};
-
-&timers9 {
-    status = "okay";
-    st,prescaler = <107>;  /* 108 MHz / 108 = 1 MHz timer clock */
-
-    pwm9: pwm {
-        status = "okay";
-        pinctrl-0 = <&tim9_ch1_pe5 &tim9_ch2_pe6>;
-        pinctrl-names = "default";
-    };
-};
-
-&timers4 {
-    status = "okay";
-    st,prescaler = <107>;  /* 108 MHz / 108 = 1 MHz timer clock */
-
-    pwm4: pwm {
-        status = "okay";
-        pinctrl-0 = <&tim4_ch1_pd12>;
-        pinctrl-names = "default";
-    };
-};
-
-&timers8 {
-    status = "okay";
-    st,prescaler = <215>;  /* 216 MHz / 216 = 1 MHz timer clock */
-
-    pwm8: pwm {
-        status = "okay";
-        pinctrl-0 = <&tim8_ch1_pc6>;
-        pinctrl-names = "default";
-    };
-};
-
-&pinctrl {
-    tim1_ch2_pe11: tim1_ch2_pe11 {
-        pinmux = <STM32_PINMUX('E', 11, AF1)>;
-        slew-rate = "very-high-speed";
-    };
-
-    tim9_ch1_pe5: tim9_ch1_pe5 {
-        pinmux = <STM32_PINMUX('E', 5, AF3)>;
-        slew-rate = "very-high-speed";
-    };
-
-    tim9_ch2_pe6: tim9_ch2_pe6 {
-        pinmux = <STM32_PINMUX('E', 6, AF3)>;
-        slew-rate = "very-high-speed";
-    };
-
-    tim4_ch1_pd12: tim4_ch1_pd12 {
-        pinmux = <STM32_PINMUX('D', 12, AF2)>;
-        slew-rate = "very-high-speed";
-    };
-
-    tim8_ch1_pc6: tim8_ch1_pc6 {
-        pinmux = <STM32_PINMUX('C', 6, AF3)>;
-        slew-rate = "very-high-speed";
-    };
-};
+/*
+ * DT overlay on NUCLEO-F767ZI
+ */
 
 / {
     aliases {
@@ -88,49 +19,42 @@
         limit-switch-z = &limit_switch_z;
     };
 
+    /* Stepper motors */
     stepper_x: stepper-x {
         compatible = "custom,stepper";
-        pwms = <&pwm1 2 1000000 PWM_POLARITY_NORMAL>;
+        pulse-gpios = <&gpiod 15 GPIO_ACTIVE_HIGH>;
         dir-gpios = <&gpiof 14 GPIO_ACTIVE_HIGH>;
         enable-gpios = <&gpioe 9 GPIO_ACTIVE_HIGH>;
-        steps-per-rev = <200>;
-        max-speed-hz = <10000>;
+        /* dir-inverted; */
     };
 
     stepper_y1: stepper-y1 {
         compatible = "custom,stepper";
-        pwms = <&pwm9 1 1000000 PWM_POLARITY_NORMAL>;
+        pulse-gpios = <&gpiof 5 GPIO_ACTIVE_HIGH>;
         dir-gpios = <&gpiof 4 GPIO_ACTIVE_HIGH>;
         enable-gpios = <&gpioe 8 GPIO_ACTIVE_HIGH>;
-        steps-per-rev = <200>;
-        max-speed-hz = <10000>;
     };
 
     stepper_y2: stepper-y2 {
         compatible = "custom,stepper";
-        pwms = <&pwm9 2 1000000 PWM_POLARITY_NORMAL>;
+        pulse-gpios = <&gpiof 10 GPIO_ACTIVE_HIGH>;
         dir-gpios = <&gpioe 7 GPIO_ACTIVE_HIGH>;
         enable-gpios = <&gpiod 14 GPIO_ACTIVE_HIGH>;
-        steps-per-rev = <200>;
-        max-speed-hz = <10000>;
+        /* dir-inverted; */
     };
 
     stepper_z: stepper-z {
         compatible = "custom,stepper";
-        pwms = <&pwm4 1 1000000 PWM_POLARITY_NORMAL>;
+        pulse-gpios = <&gpiod 5 GPIO_ACTIVE_HIGH>;
         dir-gpios = <&gpiod 6 GPIO_ACTIVE_HIGH>;
         enable-gpios = <&gpiod 7 GPIO_ACTIVE_HIGH>;
-        steps-per-rev = <200>;
-        max-speed-hz = <10000>;
     };
 
     stepper_gripper: stepper-gripper {
         compatible = "custom,stepper";
-        pwms = <&pwm8 1 1000000 PWM_POLARITY_NORMAL>;
+        pulse-gpios = <&gpioc 6 GPIO_ACTIVE_HIGH>;
         dir-gpios = <&gpioc 7 GPIO_ACTIVE_HIGH>;
         enable-gpios = <&gpioc 8 GPIO_ACTIVE_HIGH>;
-        steps-per-rev = <200>;
-        max-speed-hz = <5000>;
     };
 
     /* Servos */
@@ -154,6 +78,9 @@
         control-gpios = <&gpioh 13 GPIO_ACTIVE_HIGH>;
     };
 
+    /* Chess board matrix
+     * Pull-up and switch-active-high properties are optional; presence means true.
+     */
     chess_board: chess-board {
         compatible = "custom,chess-board-matrix";
         row-gpios = <&gpiof 1 GPIO_ACTIVE_HIGH>,
@@ -178,24 +105,29 @@
         switch-active-high;
     };
 
+    /* Limit switches for homing (rolling lever type, Normally Open)
+     * OUT pins supply VCC to the switch, IN pins read the state.
+     * When switch is pressed, OUT connects to IN -> IN reads HIGH.
+     * Using pull-down on IN pins so unpressed = LOW, pressed = HIGH.
+     */
     limit_switch_x: limit-switch-x {
         compatible = "custom,limit-switch";
-        out-gpios = <&gpioe 13 GPIO_ACTIVE_HIGH>;
-        in-gpios = <&gpiof 13 GPIO_ACTIVE_HIGH>;
-        active-high;
+        out-gpios = <&gpioe 13 GPIO_ACTIVE_HIGH>;  /* PE13 - power/signal out */
+        in-gpios = <&gpiof 13 GPIO_ACTIVE_HIGH>;   /* PF13 - read input */
+        active-high;  /* Triggered when IN reads HIGH */
     };
 
     limit_switch_y: limit-switch-y {
         compatible = "custom,limit-switch";
-        out-gpios = <&gpioe 14 GPIO_ACTIVE_HIGH>;
-        in-gpios = <&gpioe 15 GPIO_ACTIVE_HIGH>;
+        out-gpios = <&gpioe 14 GPIO_ACTIVE_HIGH>;  /* PE14 - power/signal out */
+        in-gpios = <&gpioe 15 GPIO_ACTIVE_HIGH>;   /* PE15 - read input (single switch for Y1 & Y2) */
         active-high;
     };
 
     limit_switch_z: limit-switch-z {
         compatible = "custom,limit-switch";
-        out-gpios = <&gpiof 12 GPIO_ACTIVE_HIGH>;
-        in-gpios = <&gpiog 14 GPIO_ACTIVE_HIGH>;
+        out-gpios = <&gpiof 12 GPIO_ACTIVE_HIGH>;  /* PF12 - power/signal out */
+        in-gpios = <&gpiog 14 GPIO_ACTIVE_HIGH>;   /* PG14 - read input */
         active-high;
     };
 };

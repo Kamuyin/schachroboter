@@ -82,6 +82,7 @@ int board_driver_scan(uint64_t *board_state)
             return ret;
         }
 
+    /* Allow signals to settle before reading columns (increase if needed for stable reads) */
     k_sleep(K_USEC(1000));
 
         for (int col = 0; col < BOARD_COLS; col++) {

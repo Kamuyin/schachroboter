@@ -1,3 +1,8 @@
+description: |
+  Limit switch (end-stop) for homing stepper motors.
+  Uses a power/signal output pin and an input pin to detect switch state.
+  Switch is typically Normally Open (NO) - when pressed, connects OUT to IN.
+
 compatible: "custom,limit-switch"
 
 properties:
