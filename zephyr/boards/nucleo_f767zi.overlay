@@ -8,11 +8,7 @@
         stepper-y1 = &stepper_y1;
         stepper-y2 = &stepper_y2;
         stepper-z = &stepper_z;
-        stepper-gripper = &stepper_gripper;
-        servo-1 = &servo_1;
-        servo-2 = &servo_2;
-        servo-3 = &servo_3;
-        servo-4 = &servo_4;
+        gripper-servo = &servo_1;
         chess-board = &chess_board;
         limit-switch-x = &limit_switch_x;
         limit-switch-y = &limit_switch_y;
@@ -45,37 +41,15 @@
 
     stepper_z: stepper-z {
         compatible = "custom,stepper";
-        pulse-gpios = <&gpiod 5 GPIO_ACTIVE_HIGH>;
-        dir-gpios = <&gpiod 6 GPIO_ACTIVE_HIGH>;
-        enable-gpios = <&gpiod 7 GPIO_ACTIVE_HIGH>;
+        pulse-gpios = <&gpioe 11 GPIO_ACTIVE_HIGH>;
+        dir-gpios = <&gpiof 3 GPIO_ACTIVE_HIGH>;
+        enable-gpios = <&gpiof 15 GPIO_ACTIVE_HIGH>;
     };
 
-    stepper_gripper: stepper-gripper {
-        compatible = "custom,stepper";
-        pulse-gpios = <&gpioc 6 GPIO_ACTIVE_HIGH>;
-        dir-gpios = <&gpioc 7 GPIO_ACTIVE_HIGH>;
-        enable-gpios = <&gpioc 8 GPIO_ACTIVE_HIGH>;
-    };
-
-    /* Servos */
-    servo_1: servo-1 {
+    /* Servo for gripper */
+    servo_1: gripper-servo {
         compatible = "custom,servo";
-        control-gpios = <&gpioh 10 GPIO_ACTIVE_HIGH>;
-    };
-
-    servo_2: servo-2 {
-        compatible = "custom,servo";
-        control-gpios = <&gpioh 11 GPIO_ACTIVE_HIGH>;
-    };
-
-    servo_3: servo-3 {
-        compatible = "custom,servo";
-        control-gpios = <&gpioh 12 GPIO_ACTIVE_HIGH>;
-    };
-
-    servo_4: servo-4 {
-        compatible = "custom,servo";
-        control-gpios = <&gpioh 13 GPIO_ACTIVE_HIGH>;
+        control-gpios = <&gpiog 3 GPIO_ACTIVE_HIGH>;
     };
 
     /* Chess board matrix
@@ -130,4 +104,8 @@
         in-gpios = <&gpiog 14 GPIO_ACTIVE_HIGH>;   /* PG14 - read input */
         active-high;
     };
+};
+
+&pwm1 {
+	status = "disabled";
 };

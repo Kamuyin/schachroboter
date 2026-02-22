@@ -11,7 +11,6 @@ typedef enum
     STEPPER_ID_Y1_AXIS,
     STEPPER_ID_Y2_AXIS,
     STEPPER_ID_Z_AXIS,
-    STEPPER_ID_GRIPPER,
     STEPPER_ID_MAX
 } stepper_id_t;
 

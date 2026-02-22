@@ -9,7 +9,6 @@ BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_NODELABEL(stepper_x), okay), "stepper_x DT no
 BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_NODELABEL(stepper_y1), okay), "stepper_y1 DT node required");
 BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_NODELABEL(stepper_y2), okay), "stepper_y2 DT node required");
 BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_NODELABEL(stepper_z), okay), "stepper_z DT node required");
-BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_NODELABEL(stepper_gripper), okay), "stepper_gripper DT node required");
 
 /* X-Axis */
 #define STEPPER_X_PULSE_PORT  DT_GPIO_CTLR(DT_NODELABEL(stepper_x), pulse_gpios)
@@ -42,14 +41,6 @@ BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_NODELABEL(stepper_gripper), okay), "stepper_g
 #define STEPPER_Z_DIR_PIN     DT_GPIO_PIN (DT_NODELABEL(stepper_z), dir_gpios)
 #define STEPPER_Z_ENABLE_PORT DT_GPIO_CTLR(DT_NODELABEL(stepper_z), enable_gpios)
 #define STEPPER_Z_ENABLE_PIN  DT_GPIO_PIN (DT_NODELABEL(stepper_z), enable_gpios)
-
-/* Gripper */
-#define STEPPER_GRIPPER_PULSE_PORT  DT_GPIO_CTLR(DT_NODELABEL(stepper_gripper), pulse_gpios)
-#define STEPPER_GRIPPER_PULSE_PIN   DT_GPIO_PIN (DT_NODELABEL(stepper_gripper), pulse_gpios)
-#define STEPPER_GRIPPER_DIR_PORT    DT_GPIO_CTLR(DT_NODELABEL(stepper_gripper), dir_gpios)
-#define STEPPER_GRIPPER_DIR_PIN     DT_GPIO_PIN (DT_NODELABEL(stepper_gripper), dir_gpios)
-#define STEPPER_GRIPPER_ENABLE_PORT DT_GPIO_CTLR(DT_NODELABEL(stepper_gripper), enable_gpios)
-#define STEPPER_GRIPPER_ENABLE_PIN  DT_GPIO_PIN (DT_NODELABEL(stepper_gripper), enable_gpios)
 
 #define STEPPER_DEFAULT_SPEED_US 1000
 #define STEPPER_FAST_SPEED_US 500

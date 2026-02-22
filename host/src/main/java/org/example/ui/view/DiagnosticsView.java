@@ -144,7 +144,7 @@ public class DiagnosticsView {
         Label motorLabel = new Label("Motor:");
         motorLabel.setPrefWidth(80);
         motorSelector = new ComboBox<>();
-        motorSelector.getItems().addAll("x", "y", "y1", "y2", "z", "gripper", "all");
+        motorSelector.getItems().addAll("x", "y", "y1", "y2", "z", "all");
         motorSelector.setValue("x");
         motorBox.getChildren().addAll(motorLabel, motorSelector);
         
@@ -208,7 +208,7 @@ public class DiagnosticsView {
         servoIdBox.setAlignment(Pos.CENTER_LEFT);
         Label servoIdLabel = new Label("Servo ID:");
         servoIdLabel.setPrefWidth(80);
-        servoIdSpinner = new Spinner<>(1, 4, 1, 1);
+        servoIdSpinner = new Spinner<>(1, 1, 1, 1);
         servoIdSpinner.setEditable(true);
         servoIdSpinner.setPrefWidth(120);
         servoIdBox.getChildren().addAll(servoIdLabel, servoIdSpinner);
@@ -254,7 +254,7 @@ public class DiagnosticsView {
         statusGrid.setVgap(8);
         statusGrid.setPadding(new Insets(10, 0, 0, 0));
         
-        String[] motors = {"x", "y1", "y2", "z", "gripper"};
+        String[] motors = {"x", "y1", "y2", "z"};
         for (int i = 0; i < motors.length; i++) {
             String motor = motors[i];
             Label nameLabel = new Label(motor.toUpperCase() + ":");

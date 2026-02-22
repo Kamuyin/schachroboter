@@ -18,16 +18,15 @@ LOG_MODULE_REGISTER(robot_controller, LOG_LEVEL_INF);
 #define HOMING_DIR_Y         STEPPER_DIR_CCW  /* Direction towards Y home switch */
 #define HOMING_DIR_Z         STEPPER_DIR_CCW  /* Direction towards Z home switch */
 
+#define GRIPPER_SERVO_OPEN_ANGLE_DEG   20
+#define GRIPPER_SERVO_CLOSE_ANGLE_DEG  70
+
 static stepper_motor_t *motor_x = NULL;
 static stepper_motor_t *motor_y1 = NULL;
 static stepper_motor_t *motor_y2 = NULL;
 static stepper_motor_t *motor_z = NULL;
-static stepper_motor_t *motor_gripper = NULL;
 
-static servo_motor_t *servo_1 = NULL;
-static servo_motor_t *servo_2 = NULL;
-static servo_motor_t *servo_3 = NULL;
-static servo_motor_t *servo_4 = NULL;
+static servo_motor_t *gripper_servo = NULL;
 
 /* Limit switches */
 static limit_switch_t *limit_x = NULL;
@@ -112,16 +111,6 @@ int robot_controller_init(void)
         return -ENOMEM;
     }
     
-    motor_gripper = stepper_motor_create(
-        DEVICE_DT_GET(STEPPER_GRIPPER_PULSE_PORT), STEPPER_GRIPPER_PULSE_PIN,
-        DEVICE_DT_GET(STEPPER_GRIPPER_DIR_PORT), STEPPER_GRIPPER_DIR_PIN,
-        DEVICE_DT_GET(STEPPER_GRIPPER_ENABLE_PORT), STEPPER_GRIPPER_ENABLE_PIN
-    );
-    if (!motor_gripper) {
-        LOG_ERR("Failed to create gripper motor");
-        return -ENOMEM;
-    }
-    
     ret = stepper_motor_init(motor_x);
     if (ret < 0) {
         LOG_ERR("Failed to initialize X motor: %d", ret);
@@ -150,18 +139,10 @@ int robot_controller_init(void)
     }
     stepper_motor_register_callback(motor_z, motor_move_complete);
     
-    ret = stepper_motor_init(motor_gripper);
-    if (ret < 0) {
-        LOG_ERR("Failed to initialize gripper motor: %d", ret);
-        return ret;
-    }
-    stepper_motor_register_callback(motor_gripper, motor_move_complete);
-    
     stepper_manager_register_motor(STEPPER_ID_X_AXIS, motor_x);
     stepper_manager_register_motor(STEPPER_ID_Y1_AXIS, motor_y1);
     stepper_manager_register_motor(STEPPER_ID_Y2_AXIS, motor_y2);
     stepper_manager_register_motor(STEPPER_ID_Z_AXIS, motor_z);
-    stepper_manager_register_motor(STEPPER_ID_GRIPPER, motor_gripper);
     
     ret = stepper_manager_enable_all(true);
     if (ret < 0) {
@@ -207,45 +188,19 @@ int robot_controller_init(void)
         return ret;
     }
     
-    servo_1 = servo_motor_create(DEVICE_DT_GET(SERVO_1_GPIO_PORT), SERVO_1_GPIO_PIN);
-    if (servo_1) {
-        ret = servo_motor_init(servo_1);
-        if (ret == 0) {
-            servo_manager_register_servo(SERVO_ID_1, servo_1);
-        } else {
-            LOG_WRN("Failed to initialize servo 1: %d", ret);
-        }
+    gripper_servo = servo_motor_create(DEVICE_DT_GET(GRIPPER_SERVO_GPIO_PORT), GRIPPER_SERVO_GPIO_PIN);
+    if (!gripper_servo) {
+        LOG_ERR("Failed to create gripper servo");
+        return -ENOMEM;
     }
     
-    servo_2 = servo_motor_create(DEVICE_DT_GET(SERVO_2_GPIO_PORT), SERVO_2_GPIO_PIN);
-    if (servo_2) {
-        ret = servo_motor_init(servo_2);
-        if (ret == 0) {
-            servo_manager_register_servo(SERVO_ID_2, servo_2);
-        } else {
-            LOG_WRN("Failed to initialize servo 2: %d", ret);
-        }
+    ret = servo_motor_init(gripper_servo);
+    if (ret < 0) {
+        LOG_ERR("Failed to initialize gripper servo: %d", ret);
+        return ret;
     }
     
-    servo_3 = servo_motor_create(DEVICE_DT_GET(SERVO_3_GPIO_PORT), SERVO_3_GPIO_PIN);
-    if (servo_3) {
-        ret = servo_motor_init(servo_3);
-        if (ret == 0) {
-            servo_manager_register_servo(SERVO_ID_3, servo_3);
-        } else {
-            LOG_WRN("Failed to initialize servo 3: %d", ret);
-        }
-    }
-    
-    servo_4 = servo_motor_create(DEVICE_DT_GET(SERVO_4_GPIO_PORT), SERVO_4_GPIO_PIN);
-    if (servo_4) {
-        ret = servo_motor_init(servo_4);
-        if (ret == 0) {
-            servo_manager_register_servo(SERVO_ID_4, servo_4);
-        } else {
-            LOG_WRN("Failed to initialize servo 4: %d", ret);
-        }
-    }
+    servo_manager_register_servo(SERVO_ID_1, gripper_servo);
     
     LOG_INF("Robot controller initialized");
     return 0;
@@ -415,20 +370,22 @@ bool robot_controller_limit_switch_triggered(char axis)
 
 int robot_controller_gripper_open(void)
 {
-    if (!motor_gripper) {
+    if (!gripper_servo) {
         return -EINVAL;
     }
-    
-    return stepper_motor_move_steps(motor_gripper, -200, STEPPER_SLOW_SPEED_US);
+
+    (void)servo_motor_enable(gripper_servo, true);
+    return servo_motor_set_angle(gripper_servo, GRIPPER_SERVO_OPEN_ANGLE_DEG);
 }
 
 int robot_controller_gripper_close(void)
 {
-    if (!motor_gripper) {
+    if (!gripper_servo) {
         return -EINVAL;
     }
-    
-    return stepper_motor_move_steps(motor_gripper, 200, STEPPER_SLOW_SPEED_US);
+
+    (void)servo_motor_enable(gripper_servo, true);
+    return servo_motor_set_angle(gripper_servo, GRIPPER_SERVO_CLOSE_ANGLE_DEG);
 }
 
 int robot_controller_servo_set_angle(uint8_t servo_id, uint16_t angle_degrees)
@@ -478,11 +435,10 @@ robot_position_t robot_controller_get_position(void)
 void robot_controller_update(void)
 {
     stepper_manager_update_all();
-    
-    if (servo_1) servo_motor_update(servo_1);
-    if (servo_2) servo_motor_update(servo_2);
-    if (servo_3) servo_motor_update(servo_3);
-    if (servo_4) servo_motor_update(servo_4);
+
+    if (gripper_servo) {
+        servo_motor_update(gripper_servo);
+    }
     
     /* Handle homing state machine */
     if (homing_state == HOMING_STATE_Z) {

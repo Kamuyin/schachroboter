@@ -24,7 +24,6 @@ static const char *stepper_id_to_name(stepper_id_t id)
     case STEPPER_ID_Y1_AXIS: return "y1";
     case STEPPER_ID_Y2_AXIS: return "y2";
     case STEPPER_ID_Z_AXIS:  return "z";
-    case STEPPER_ID_GRIPPER: return "gripper";
     default:                 return "unknown";
     }
 }
@@ -35,7 +34,6 @@ static stepper_id_t stepper_name_to_id(const char *name)
     if (strcmp(name, "y") == 0 || strcmp(name, "Y") == 0 || strcmp(name, "y1") == 0 || strcmp(name, "Y1") == 0) return STEPPER_ID_Y1_AXIS;
     if (strcmp(name, "y2") == 0 || strcmp(name, "Y2") == 0) return STEPPER_ID_Y2_AXIS;
     if (strcmp(name, "z") == 0 || strcmp(name, "Z") == 0) return STEPPER_ID_Z_AXIS;
-    if (strcmp(name, "gripper") == 0 || strcmp(name, "GRIPPER") == 0) return STEPPER_ID_GRIPPER;
     return STEPPER_ID_MAX; /* invalid */
 }
 
@@ -500,7 +498,18 @@ static void on_diag_servo_set(const char *topic, const uint8_t *payload, uint32_
         return;
     }
 
-    int ret = robot_controller_servo_set_angle((uint8_t)servo_id->valueint, (uint16_t)angle->valueint);
+    int servo_id_value = servo_id->valueint;
+    if (servo_id_value < 1 || servo_id_value > SERVO_ID_MAX) {
+        LOG_ERR("DIAG: Invalid servo ID %d (valid range: 1-%d)", servo_id_value, SERVO_ID_MAX);
+        publish_diag_response("chess/diag/servo/response", "error", "Invalid servo id");
+        cJSON_Delete(root);
+        return;
+    }
+
+    /* MQTT API uses 1-based IDs; firmware enum is 0-based */
+    uint8_t servo_index = (uint8_t)(servo_id_value - 1);
+
+    int ret = robot_controller_servo_set_angle(servo_index, (uint16_t)angle->valueint);
     if (ret < 0) {
         LOG_ERR("DIAG: Failed to set servo %d angle: %d", servo_id->valueint, ret);
         publish_diag_response("chess/diag/servo/response", "error", "Failed to set angle");
@@ -548,8 +557,18 @@ static void on_diag_servo_enable(const char *topic, const uint8_t *payload, uint
         return;
     }
 
+    int servo_id_value = servo_id->valueint;
+    if (servo_id_value < 1 || servo_id_value > SERVO_ID_MAX) {
+        LOG_ERR("DIAG: Invalid servo ID %d (valid range: 1-%d)", servo_id_value, SERVO_ID_MAX);
+        publish_diag_response("chess/diag/servo/response", "error", "Invalid servo id");
+        cJSON_Delete(root);
+        return;
+    }
+
     bool en = cJSON_IsTrue(enable);
-    int ret = robot_controller_servo_enable((uint8_t)servo_id->valueint, en);
+    /* MQTT API uses 1-based IDs; firmware enum is 0-based */
+    uint8_t servo_index = (uint8_t)(servo_id_value - 1);
+    int ret = robot_controller_servo_enable(servo_index, en);
     if (ret < 0) {
         LOG_ERR("DIAG: Failed to %s servo %d: %d", en ? "enable" : "disable", servo_id->valueint, ret);
         publish_diag_response("chess/diag/servo/response", "error", "Failed to set enable");
