@@ -9,5 +9,6 @@ BUILD_ASSERT(DT_NODE_HAS_STATUS(DT_NODELABEL(servo_1), okay), "servo_1 DT node r
 
 #define GRIPPER_SERVO_GPIO_PORT DT_GPIO_CTLR(DT_NODELABEL(servo_1), control_gpios)
 #define GRIPPER_SERVO_GPIO_PIN  DT_GPIO_PIN (DT_NODELABEL(servo_1), control_gpios)
+#define GRIPPER_SERVO_GPIO_FLAGS DT_GPIO_FLAGS(DT_NODELABEL(servo_1), control_gpios)
 
 #endif

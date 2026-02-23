@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <zephyr/drivers/gpio.h>
 
 #define SERVO_MIN_ANGLE 0
 #define SERVO_MAX_ANGLE 180
@@ -12,7 +13,7 @@
 
 typedef struct servo_motor servo_motor_t;
 
-servo_motor_t *servo_motor_create(const struct device *gpio_port, uint32_t gpio_pin);
+servo_motor_t *servo_motor_create(const struct device *gpio_port, uint32_t gpio_pin, gpio_dt_flags_t gpio_flags);
 int servo_motor_init(servo_motor_t *servo);
 int servo_motor_set_angle(servo_motor_t *servo, uint16_t angle_degrees);
 int servo_motor_set_pulse_width(servo_motor_t *servo, uint32_t pulse_us);

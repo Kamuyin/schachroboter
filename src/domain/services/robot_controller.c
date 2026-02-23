@@ -188,7 +188,7 @@ int robot_controller_init(void)
         return ret;
     }
     
-    gripper_servo = servo_motor_create(DEVICE_DT_GET(GRIPPER_SERVO_GPIO_PORT), GRIPPER_SERVO_GPIO_PIN);
+    gripper_servo = servo_motor_create(DEVICE_DT_GET(GRIPPER_SERVO_GPIO_PORT), GRIPPER_SERVO_GPIO_PIN, GRIPPER_SERVO_GPIO_FLAGS);
     if (!gripper_servo) {
         LOG_ERR("Failed to create gripper servo");
         return -ENOMEM;
@@ -436,10 +436,6 @@ void robot_controller_update(void)
 {
     stepper_manager_update_all();
 
-    if (gripper_servo) {
-        servo_motor_update(gripper_servo);
-    }
-    
     /* Handle homing state machine */
     if (homing_state == HOMING_STATE_Z) {
         /* Check if Z homing complete (limit switch triggered and motor stopped) */

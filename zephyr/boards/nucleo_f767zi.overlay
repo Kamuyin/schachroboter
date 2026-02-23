@@ -49,7 +49,7 @@
     /* Servo for gripper */
     servo_1: gripper-servo {
         compatible = "custom,servo";
-        control-gpios = <&gpiog 3 GPIO_ACTIVE_HIGH>;
+        control-gpios = <&gpioc 5 GPIO_ACTIVE_HIGH>;
     };
 
     /* Chess board matrix

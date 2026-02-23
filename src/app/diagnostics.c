@@ -475,7 +475,7 @@ static void on_diag_homing_status(const char *topic, const uint8_t *payload, uin
 
 static void on_diag_servo_set(const char *topic, const uint8_t *payload, uint32_t payload_len)
 {
-    /* Expected JSON: {"servo": 1, "angle": 90} */
+    /* Expected JSON: {"angle": 90} */
     cJSON *root = cJSON_ParseWithLength((const char *)payload, payload_len);
     if (!root) {
         LOG_ERR("DIAG: Failed to parse servo set JSON");
@@ -483,14 +483,7 @@ static void on_diag_servo_set(const char *topic, const uint8_t *payload, uint32_
         return;
     }
 
-    cJSON *servo_id = cJSON_GetObjectItem(root, "servo");
     cJSON *angle = cJSON_GetObjectItem(root, "angle");
-
-    if (!servo_id || !cJSON_IsNumber(servo_id)) {
-        publish_diag_response("chess/diag/servo/response", "error", "Missing 'servo' field");
-        cJSON_Delete(root);
-        return;
-    }
 
     if (!angle || !cJSON_IsNumber(angle)) {
         publish_diag_response("chess/diag/servo/response", "error", "Missing 'angle' field");
@@ -498,27 +491,24 @@ static void on_diag_servo_set(const char *topic, const uint8_t *payload, uint32_
         return;
     }
 
-    int servo_id_value = servo_id->valueint;
-    if (servo_id_value < 1 || servo_id_value > SERVO_ID_MAX) {
-        LOG_ERR("DIAG: Invalid servo ID %d (valid range: 1-%d)", servo_id_value, SERVO_ID_MAX);
-        publish_diag_response("chess/diag/servo/response", "error", "Invalid servo id");
+    /* Auto-enable the single gripper servo before setting angle */
+    int ret = robot_controller_servo_enable(SERVO_ID_1, true);
+    if (ret < 0) {
+        LOG_ERR("DIAG: Failed to enable gripper servo before set: %d", ret);
+        publish_diag_response("chess/diag/servo/response", "error", "Failed to enable servo");
         cJSON_Delete(root);
         return;
     }
 
-    /* MQTT API uses 1-based IDs; firmware enum is 0-based */
-    uint8_t servo_index = (uint8_t)(servo_id_value - 1);
-
-    int ret = robot_controller_servo_set_angle(servo_index, (uint16_t)angle->valueint);
+    ret = robot_controller_servo_set_angle(SERVO_ID_1, (uint16_t)angle->valueint);
     if (ret < 0) {
-        LOG_ERR("DIAG: Failed to set servo %d angle: %d", servo_id->valueint, ret);
+        LOG_ERR("DIAG: Failed to set gripper servo angle: %d", ret);
         publish_diag_response("chess/diag/servo/response", "error", "Failed to set angle");
     } else {
-        LOG_INF("DIAG: Set servo %d to %d degrees", servo_id->valueint, angle->valueint);
+        LOG_INF("DIAG: Set gripper servo to %d degrees", angle->valueint);
         
         cJSON *resp = cJSON_CreateObject();
         cJSON_AddStringToObject(resp, "status", "ok");
-        cJSON_AddNumberToObject(resp, "servo", servo_id->valueint);
         cJSON_AddNumberToObject(resp, "angle", angle->valueint);
         cJSON_AddNumberToObject(resp, "timestamp", k_uptime_get_32());
         char *resp_payload = cJSON_PrintUnformatted(resp);
@@ -534,7 +524,7 @@ static void on_diag_servo_set(const char *topic, const uint8_t *payload, uint32_
 
 static void on_diag_servo_enable(const char *topic, const uint8_t *payload, uint32_t payload_len)
 {
-    /* Expected JSON: {"servo": 1, "enable": true} */
+    /* Expected JSON: {"enable": true} */
     cJSON *root = cJSON_ParseWithLength((const char *)payload, payload_len);
     if (!root) {
         LOG_ERR("DIAG: Failed to parse servo enable JSON");
@@ -542,14 +532,7 @@ static void on_diag_servo_enable(const char *topic, const uint8_t *payload, uint
         return;
     }
 
-    cJSON *servo_id = cJSON_GetObjectItem(root, "servo");
     cJSON *enable = cJSON_GetObjectItem(root, "enable");
-
-    if (!servo_id || !cJSON_IsNumber(servo_id)) {
-        publish_diag_response("chess/diag/servo/response", "error", "Missing 'servo' field");
-        cJSON_Delete(root);
-        return;
-    }
 
     if (!enable || !cJSON_IsBool(enable)) {
         publish_diag_response("chess/diag/servo/response", "error", "Missing 'enable' field");
@@ -557,23 +540,13 @@ static void on_diag_servo_enable(const char *topic, const uint8_t *payload, uint
         return;
     }
 
-    int servo_id_value = servo_id->valueint;
-    if (servo_id_value < 1 || servo_id_value > SERVO_ID_MAX) {
-        LOG_ERR("DIAG: Invalid servo ID %d (valid range: 1-%d)", servo_id_value, SERVO_ID_MAX);
-        publish_diag_response("chess/diag/servo/response", "error", "Invalid servo id");
-        cJSON_Delete(root);
-        return;
-    }
-
     bool en = cJSON_IsTrue(enable);
-    /* MQTT API uses 1-based IDs; firmware enum is 0-based */
-    uint8_t servo_index = (uint8_t)(servo_id_value - 1);
-    int ret = robot_controller_servo_enable(servo_index, en);
+    int ret = robot_controller_servo_enable(SERVO_ID_1, en);
     if (ret < 0) {
-        LOG_ERR("DIAG: Failed to %s servo %d: %d", en ? "enable" : "disable", servo_id->valueint, ret);
+        LOG_ERR("DIAG: Failed to %s gripper servo: %d", en ? "enable" : "disable", ret);
         publish_diag_response("chess/diag/servo/response", "error", "Failed to set enable");
     } else {
-        LOG_INF("DIAG: %s servo %d", en ? "Enabled" : "Disabled", servo_id->valueint);
+        LOG_INF("DIAG: %s gripper servo", en ? "Enabled" : "Disabled");
         publish_diag_response("chess/diag/servo/response", "ok", en ? "Servo enabled" : "Servo disabled");
     }
 

@@ -40,7 +40,6 @@ public class DiagnosticsView {
     private Button statusBtn;
     
     // Servo controls
-    private Spinner<Integer> servoIdSpinner;
     private Spinner<Integer> servoAngleSpinner;
     private Button servoSetBtn;
     private Button servoEnableBtn;
@@ -200,18 +199,8 @@ public class DiagnosticsView {
     private VBox createServoControlsSection() {
         VBox section = new VBox(10);
         
-        Label titleLabel = new Label("Servo Motor Control");
+        Label titleLabel = new Label("Gripper Servo Control");
         titleLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
-        
-        // Servo ID selection
-        HBox servoIdBox = new HBox(10);
-        servoIdBox.setAlignment(Pos.CENTER_LEFT);
-        Label servoIdLabel = new Label("Servo ID:");
-        servoIdLabel.setPrefWidth(80);
-        servoIdSpinner = new Spinner<>(1, 1, 1, 1);
-        servoIdSpinner.setEditable(true);
-        servoIdSpinner.setPrefWidth(120);
-        servoIdBox.getChildren().addAll(servoIdLabel, servoIdSpinner);
         
         // Angle input
         HBox angleBox = new HBox(10);
@@ -238,7 +227,7 @@ public class DiagnosticsView {
         
         buttonBox.getChildren().addAll(servoSetBtn, servoEnableBtn, servoDisableBtn);
         
-        section.getChildren().addAll(titleLabel, servoIdBox, angleBox, buttonBox);
+        section.getChildren().addAll(titleLabel, angleBox, buttonBox);
         return section;
     }
     
@@ -425,12 +414,10 @@ public class DiagnosticsView {
     private void handleServoSet() {
         try {
             Map<String, Object> payload = new HashMap<>();
-            payload.put("servo", servoIdSpinner.getValue());
             payload.put("angle", servoAngleSpinner.getValue());
             
             mqttClient.publish("chess/diag/servo/set", payload);
-            logMessage("Sent servo set: ID=" + servoIdSpinner.getValue() + 
-                      " angle=" + servoAngleSpinner.getValue() + "°");
+            logMessage("Sent gripper servo angle=" + servoAngleSpinner.getValue() + "°");
         } catch (MqttException e) {
             logger.error("Failed to send servo set command", e);
             logMessage("Error: " + e.getMessage());
@@ -440,11 +427,10 @@ public class DiagnosticsView {
     private void handleServoEnable(boolean enable) {
         try {
             Map<String, Object> payload = new HashMap<>();
-            payload.put("servo", servoIdSpinner.getValue());
             payload.put("enable", enable);
             
             mqttClient.publish("chess/diag/servo/enable", payload);
-            logMessage("Sent servo " + (enable ? "enable" : "disable") + ": ID=" + servoIdSpinner.getValue());
+            logMessage("Sent gripper servo " + (enable ? "enable" : "disable"));
         } catch (MqttException e) {
             logger.error("Failed to send servo enable command", e);
             logMessage("Error: " + e.getMessage());
