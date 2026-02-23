@@ -164,9 +164,12 @@ int servo_motor_enable(servo_motor_t *servo, bool enable)
         return -EINVAL;
     }
 
+    LOG_INF("servo_motor_enable: enable=%d, current_enabled=%d, port=%p, pin=%u",
+            enable, servo->enabled, servo->gpio_port, servo->gpio_pin);
+
     if (enable && !servo->enabled) {
         servo->enabled = true;
-        LOG_INF("Servo enabled at %u degrees", servo->current_angle);
+        LOG_INF("Servo enabled at %u degrees (pulse=%u us)", servo->current_angle, servo->current_pulse_us);
     } else if (!enable && servo->enabled) {
         servo->enabled = false;
         gpio_pin_set(servo->gpio_port, servo->gpio_pin, 0);
