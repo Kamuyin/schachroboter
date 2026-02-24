@@ -17,6 +17,8 @@ static struct k_thread mqtt_client_thread_data;
 static struct k_thread application_thread_data;
 static struct k_thread robot_controller_thread_data;
 
+#include "limit_switch.h"
+
 int main(void)
 {
     int ret;

@@ -357,6 +357,27 @@ bool limit_switch_was_triggered(const limit_switch_t *sw)
     return sw->triggered_flag;
 }
 
+void limit_switch_debug_log_state(void)
+{
+    LOG_INF("--- Limit Switch Debug State ---");
+    for (int i = 0; i < LIMIT_SWITCH_MAX; i++) {
+        struct limit_switch *sw = &switches[i];
+        if (!sw->initialized) {
+            LOG_INF("Switch %d: Not Initialized", i);
+            continue;
+        }
+
+        int val = gpio_pin_get(sw->in_port, sw->in_pin);
+        LOG_INF("Switch %d (%s:%d): Raw=%d, Latched=%d, Debounce=%d", 
+                i, sw->in_port->name, sw->in_pin, 
+                val, sw->active_latched, sw->trigger_debounce_counter);
+    }
+    LOG_INF("--------------------------------");
+}
+
+#define RELEASE_DEBOUNCE_COUNT 100 
+#define TRIGGER_DEBOUNCE_COUNT 3
+
 void limit_switch_clear_triggered(limit_switch_t *sw)
 {
     if (sw) {
@@ -364,9 +385,6 @@ void limit_switch_clear_triggered(limit_switch_t *sw)
         sw->active_latched = false;
     }
 }
-
-#define RELEASE_DEBOUNCE_COUNT 100 
-#define TRIGGER_DEBOUNCE_COUNT 3
 
 void limit_switch_safety_poll(void)
 {
