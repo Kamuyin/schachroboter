@@ -10,9 +10,6 @@
         stepper-z = &stepper_z;
         gripper-servo = &servo_1;
         chess-board = &chess_board;
-        limit-switch-x = &limit_switch_x;
-        limit-switch-y = &limit_switch_y;
-        limit-switch-z = &limit_switch_z;
     };
 
     /* Stepper motors */
@@ -78,11 +75,11 @@
         switch-active-high;
     };
 
-    /* Limit switches for homing (rolling lever type, Normally Open)
-     * OUT pins supply VCC to the switch, IN pins read the state.
-     * When switch is pressed, OUT connects to IN -> IN reads HIGH.
-     * Using pull-down on IN pins so unpressed = LOW, pressed = HIGH.
+    /*
+     * Limit switches are intentionally disabled.
+     * Keep this block commented out until hardware is re-enabled.
      */
+    /*
     limit_switch_x: limit-switch-x {
         compatible = "custom,limit-switch";
         out-gpios = <&gpiod 4 GPIO_ACTIVE_HIGH>;
@@ -103,6 +100,7 @@
         in-gpios  = <&gpioc 3 GPIO_ACTIVE_HIGH>;
         active-high;
     };
+    */
 };
 
 &pwm1 {

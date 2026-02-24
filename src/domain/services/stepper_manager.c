@@ -2,7 +2,6 @@
 #include <zephyr/logging/log.h>
 #include <string.h>
 #include "stepper_manager.h"
-#include "limit_switch.h"
 
 LOG_MODULE_REGISTER(stepper_manager, LOG_LEVEL_INF);
 
@@ -59,12 +58,6 @@ void stepper_manager_update_all(void)
     if (!initialized) {
         return;
     }
-
-    /*
-     * Hard safety layer: poll all limit switches on every motion tick.
-     * This guarantees emergency-stop behavior even if GPIO interrupts fail.
-     */
-    limit_switch_safety_poll();
 
     bool y_pair_handled = false;
 
