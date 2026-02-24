@@ -3,6 +3,7 @@
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
+#include <string.h>
 #include "limit_switch.h"
 #include "stepper_motor.h"
 
@@ -40,6 +41,7 @@ static struct limit_switch switches[LIMIT_SWITCH_MAX];
 
 /* Forward declaration of ISR handler */
 static void limit_switch_isr(const struct device *port, struct gpio_callback *cb, uint32_t pins);
+static void limit_switch_handle_trigger(struct limit_switch *sw);
 
 /* Device tree node check macros */
 #define LIMIT_SWITCH_X_NODE DT_NODELABEL(limit_switch_x)
@@ -136,29 +138,37 @@ static int init_switch_from_dt(limit_switch_id_t id,
 
 static void limit_switch_isr(const struct device *port, struct gpio_callback *cb, uint32_t pins)
 {
-    /* Find which switch triggered */
+    ARG_UNUSED(cb);
+
     for (int i = 0; i < LIMIT_SWITCH_MAX; i++) {
         struct limit_switch *sw = &switches[i];
-        
+
         if (!sw->initialized) {
             continue;
         }
-        
+
         if (sw->in_port == port && (pins & BIT(sw->in_pin))) {
-            sw->triggered_flag = true;
-
-            /* Unconditional emergency stop */
-            for (int m = 0; m < sw->motor_count; m++) {
-                if (sw->motors[m]) {
-                    stepper_motor_emergency_stop(sw->motors[m]);
-                }
-            }
-
-            /* Invoke user callback if registered (must be ISR-safe) */
-            if (sw->callback) {
-                sw->callback(sw, sw->user_data);
-            }
+            limit_switch_handle_trigger(sw);
         }
+    }
+}
+
+static void limit_switch_handle_trigger(struct limit_switch *sw)
+{
+    if (!sw || !sw->initialized) {
+        return;
+    }
+
+    sw->triggered_flag = true;
+
+    for (int m = 0; m < sw->motor_count; m++) {
+        if (sw->motors[m]) {
+            stepper_motor_emergency_stop(sw->motors[m]);
+        }
+    }
+
+    if (sw->callback) {
+        sw->callback(sw, sw->user_data);
     }
 }
 
@@ -166,11 +176,11 @@ int limit_switch_init(void)
 {
     int ret;
     int initialized_count = 0;
-    
+
     LOG_INF("Initializing limit switches");
-    
+
     memset(switches, 0, sizeof(switches));
-    
+
 #if HAVE_LIMIT_X
     ret = init_switch_from_dt(
         LIMIT_SWITCH_X,
@@ -313,5 +323,25 @@ void limit_switch_clear_triggered(limit_switch_t *sw)
 {
     if (sw) {
         sw->triggered_flag = false;
+    }
+}
+
+void limit_switch_poll_safety(void)
+{
+    for (int i = 0; i < LIMIT_SWITCH_MAX; i++) {
+        struct limit_switch *sw = &switches[i];
+        if (!sw->initialized) {
+            continue;
+        }
+
+        int val = gpio_pin_get(sw->in_port, sw->in_pin);
+        if (val < 0) {
+            continue;
+        }
+
+        bool triggered = sw->active_high ? (val > 0) : (val == 0);
+        if (triggered) {
+            limit_switch_handle_trigger(sw);
+        }
     }
 }
