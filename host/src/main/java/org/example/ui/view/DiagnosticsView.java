@@ -45,6 +45,17 @@ public class DiagnosticsView {
     private Button servoEnableBtn;
     private Button servoDisableBtn;
     
+    // Robot coordinate move controls
+    private Spinner<Integer> xPositionSpinner;
+    private Spinner<Integer> yPositionSpinner;
+    private Spinner<Integer> zPositionSpinner;
+    private Spinner<Integer> moveSpeedSpinner;
+    private Button moveToBtn;
+    private Button homeAllBtn;
+    private Button gripperOpenBtn;
+    private Button gripperCloseBtn;
+    private Label currentPositionLabel;
+    
     // Status displays
     private Map<String, Label> motorStatusLabels;
     
@@ -120,6 +131,11 @@ public class DiagnosticsView {
         VBox panel = new VBox(15);
         panel.setPadding(new Insets(15));
         
+        // Robot Coordinate Move Controls
+        panel.getChildren().add(createRobotMoveControlsSection());
+        
+        panel.getChildren().add(new Separator());
+        
         // Stepper Motor Controls
         panel.getChildren().add(createStepperControlsSection());
         
@@ -129,6 +145,97 @@ public class DiagnosticsView {
         panel.getChildren().add(createServoControlsSection());
         
         return panel;
+    }
+    
+    private VBox createRobotMoveControlsSection() {
+        VBox section = new VBox(10);
+        
+        Label titleLabel = new Label("Robot Coordinate Move Control");
+        titleLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
+        
+        // Current position display
+        HBox currentPosBox = new HBox(10);
+        currentPosBox.setAlignment(Pos.CENTER_LEFT);
+        Label currentPosTitle = new Label("Current Position:");
+        currentPosTitle.setStyle("-fx-font-weight: bold;");
+        currentPositionLabel = new Label("X: ?, Y: ?, Z: ?");
+        currentPositionLabel.setStyle("-fx-padding: 0 0 0 10; -fx-text-fill: #0066cc;");
+        currentPosBox.getChildren().addAll(currentPosTitle, currentPositionLabel);
+        
+        // Position inputs
+        GridPane positionGrid = new GridPane();
+        positionGrid.setHgap(15);
+        positionGrid.setVgap(8);
+        
+        // X position
+        Label xLabel = new Label("X (mm):");
+        xLabel.setPrefWidth(80);
+        xPositionSpinner = new Spinner<>(-500, 500, 0, 10);
+        xPositionSpinner.setEditable(true);
+        xPositionSpinner.setPrefWidth(120);
+        positionGrid.add(xLabel, 0, 0);
+        positionGrid.add(xPositionSpinner, 1, 0);
+        
+        // Y position
+        Label yLabel = new Label("Y (mm):");
+        yLabel.setPrefWidth(80);
+        yPositionSpinner = new Spinner<>(-500, 500, 0, 10);
+        yPositionSpinner.setEditable(true);
+        yPositionSpinner.setPrefWidth(120);
+        positionGrid.add(yLabel, 0, 1);
+        positionGrid.add(yPositionSpinner, 1, 1);
+        
+        // Z position
+        Label zLabel = new Label("Z (mm):");
+        zLabel.setPrefWidth(80);
+        zPositionSpinner = new Spinner<>(-200, 200, 0, 10);
+        zPositionSpinner.setEditable(true);
+        zPositionSpinner.setPrefWidth(120);
+        positionGrid.add(zLabel, 0, 2);
+        positionGrid.add(zPositionSpinner, 1, 2);
+        
+        // Speed
+        Label speedLabel = new Label("Speed (µs):");
+        speedLabel.setPrefWidth(80);
+        moveSpeedSpinner = new Spinner<>(100, 10000, 1000, 100);
+        moveSpeedSpinner.setEditable(true);
+        moveSpeedSpinner.setPrefWidth(120);
+        positionGrid.add(speedLabel, 0, 3);
+        positionGrid.add(moveSpeedSpinner, 1, 3);
+        
+        // Control buttons
+        HBox buttonBox = new HBox(10);
+        buttonBox.setAlignment(Pos.CENTER_LEFT);
+        
+        moveToBtn = new Button("Move To Position");
+        moveToBtn.setOnAction(e -> handleMoveTo());
+        moveToBtn.setStyle("-fx-background-color: #4CAF50; -fx-text-fill: white;");
+        
+        homeAllBtn = new Button("Home All");
+        homeAllBtn.setOnAction(e -> handleHomeAll());
+        
+        Button getPositionBtn = new Button("Get Position");
+        getPositionBtn.setOnAction(e -> handleGetPosition());
+        
+        buttonBox.getChildren().addAll(moveToBtn, homeAllBtn, getPositionBtn);
+        
+        // Gripper quick controls
+        HBox gripperBox = new HBox(10);
+        gripperBox.setAlignment(Pos.CENTER_LEFT);
+        
+        Label gripperLabel = new Label("Gripper:");
+        gripperLabel.setStyle("-fx-font-weight: bold;");
+        
+        gripperOpenBtn = new Button("Open");
+        gripperOpenBtn.setOnAction(e -> handleGripperOpen());
+        
+        gripperCloseBtn = new Button("Close");
+        gripperCloseBtn.setOnAction(e -> handleGripperClose());
+        
+        gripperBox.getChildren().addAll(gripperLabel, gripperOpenBtn, gripperCloseBtn);
+        
+        section.getChildren().addAll(titleLabel, currentPosBox, positionGrid, buttonBox, gripperBox);
+        return section;
     }
     
     private VBox createStepperControlsSection() {
@@ -295,6 +402,7 @@ public class DiagnosticsView {
             mqttClient.connect(brokerUrl, clientId);
             
             // Subscribe to response topics
+            mqttClient.subscribe("chess/robot/status", this::handleRobotStatus);
             mqttClient.subscribe("chess/diag/stepper/response", this::handleStepperResponse);
             mqttClient.subscribe("chess/diag/servo/response", this::handleServoResponse);
             
@@ -334,6 +442,10 @@ public class DiagnosticsView {
             servoSetBtn.setDisable(!enable);
             servoEnableBtn.setDisable(!enable);
             servoDisableBtn.setDisable(!enable);
+            moveToBtn.setDisable(!enable);
+            homeAllBtn.setDisable(!enable);
+            gripperOpenBtn.setDisable(!enable);
+            gripperCloseBtn.setDisable(!enable);
         });
     }
     
@@ -410,6 +522,79 @@ public class DiagnosticsView {
         }
     }
     
+    // Robot coordinate move command handlers
+    private void handleMoveTo() {
+        try {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("command", "move");
+            payload.put("x", xPositionSpinner.getValue());
+            payload.put("y", yPositionSpinner.getValue());
+            payload.put("z", zPositionSpinner.getValue());
+            payload.put("speed", moveSpeedSpinner.getValue());
+            
+            mqttClient.publish("chess/robot/command", payload);
+            logMessage("Sent move command: X=" + xPositionSpinner.getValue() + 
+                      ", Y=" + yPositionSpinner.getValue() + 
+                      ", Z=" + zPositionSpinner.getValue() + 
+                      " @ " + moveSpeedSpinner.getValue() + "µs");
+        } catch (MqttException e) {
+            logger.error("Failed to send move command", e);
+            logMessage("Error: " + e.getMessage());
+        }
+    }
+    
+    private void handleHomeAll() {
+        try {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("command", "home");
+            
+            mqttClient.publish("chess/robot/command", payload);
+            logMessage("Sent home all axes command");
+        } catch (MqttException e) {
+            logger.error("Failed to send home command", e);
+            logMessage("Error: " + e.getMessage());
+        }
+    }
+    
+    private void handleGetPosition() {
+        try {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("command", "get_position");
+            
+            mqttClient.publish("chess/robot/command", payload);
+            logMessage("Requested current position");
+        } catch (MqttException e) {
+            logger.error("Failed to request position", e);
+            logMessage("Error: " + e.getMessage());
+        }
+    }
+    
+    private void handleGripperOpen() {
+        try {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("command", "gripper_open");
+            
+            mqttClient.publish("chess/robot/command", payload);
+            logMessage("Sent gripper open command");
+        } catch (MqttException e) {
+            logger.error("Failed to send gripper open command", e);
+            logMessage("Error: " + e.getMessage());
+        }
+    }
+    
+    private void handleGripperClose() {
+        try {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("command", "gripper_close");
+            
+            mqttClient.publish("chess/robot/command", payload);
+            logMessage("Sent gripper close command");
+        } catch (MqttException e) {
+            logger.error("Failed to send gripper close command", e);
+            logMessage("Error: " + e.getMessage());
+        }
+    }
+    
     // Servo motor command handlers
     private void handleServoSet() {
         try {
@@ -457,6 +642,38 @@ public class DiagnosticsView {
     private void handleServoResponse(String payload) {
         Platform.runLater(() -> {
             logMessage("← " + payload);
+        });
+    }
+    
+    private void handleRobotStatus(String payload) {
+        Platform.runLater(() -> {
+            try {
+                JsonObject json = gson.fromJson(payload, JsonObject.class);
+                
+                // Update position if available
+                if (json.has("position")) {
+                    JsonObject position = json.getAsJsonObject("position");
+                    int x = position.has("x") ? position.get("x").getAsInt() : 0;
+                    int y = position.has("y") ? position.get("y").getAsInt() : 0;
+                    int z = position.has("z") ? position.get("z").getAsInt() : 0;
+                    
+                    currentPositionLabel.setText(String.format("X: %d, Y: %d, Z: %d", x, y, z));
+                }
+                
+                // Log status messages
+                if (json.has("status")) {
+                    String status = json.get("status").getAsString();
+                    logMessage("Robot status: " + status);
+                }
+                
+                if (json.has("message")) {
+                    String message = json.get("message").getAsString();
+                    logMessage("← " + message);
+                }
+            } catch (Exception e) {
+                logger.debug("Failed to parse robot status JSON", e);
+                logMessage("← " + payload);
+            }
         });
     }
     
