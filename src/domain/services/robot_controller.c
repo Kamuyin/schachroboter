@@ -445,11 +445,6 @@ robot_position_t robot_controller_get_position(void)
 
 void robot_controller_update(void)
 {
-    /* Safety interlock: if any limit is active, stop attached axis immediately
-     * before producing further step pulses in this cycle.
-     */
-    limit_switch_poll_safety();
-
     stepper_manager_update_all();
 
     /* Handle homing state machine */

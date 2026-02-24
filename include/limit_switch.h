@@ -103,13 +103,4 @@ bool limit_switch_was_triggered(const limit_switch_t *sw);
  */
 void limit_switch_clear_triggered(limit_switch_t *sw);
 
-/**
- * @brief Poll all switches and enforce emergency stop if any is active.
- *
- * This is a safety redundancy path in case GPIO interrupts are missed or
- * unavailable. Call this periodically from the motor control task before
- * generating new step pulses.
- */
-void limit_switch_poll_safety(void);
-
 #endif /* LIMIT_SWITCH_H */
