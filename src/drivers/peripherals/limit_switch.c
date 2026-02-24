@@ -32,6 +32,8 @@ struct limit_switch {
     /* State */
     volatile bool triggered_flag;
     volatile bool active_latched;
+    uint32_t release_counter;
+    uint32_t trigger_debounce_counter;
     bool interrupt_enabled;
     bool initialized;
 };
@@ -164,6 +166,7 @@ static int init_switch_from_dt(limit_switch_id_t id,
         return ret;
     }
     
+    sw->trigger_debounce_counter = 0;
     sw->interrupt_enabled = true;
     sw->initialized = true;
 
@@ -194,8 +197,16 @@ static void limit_switch_isr(const struct device *port, struct gpio_callback *cb
             continue;
         }
         
+        /* Check if this switch matches the triggered port/pin */
         if (sw->in_port == port && (pins & BIT(sw->in_pin))) {
-            trigger_switch(sw);
+            /* 
+             * Simple glitch filter:
+             * Verify that the switch is actually in the active state.
+             * If this was just a noise spike that already passed, ignore it.
+             */
+            if (read_switch_triggered(sw)) {
+                trigger_switch(sw);
+            }
         }
     }
 }
@@ -354,6 +365,9 @@ void limit_switch_clear_triggered(limit_switch_t *sw)
     }
 }
 
+#define RELEASE_DEBOUNCE_COUNT 100 
+#define TRIGGER_DEBOUNCE_COUNT 3
+
 void limit_switch_safety_poll(void)
 {
     for (int i = 0; i < LIMIT_SWITCH_MAX; i++) {
@@ -364,10 +378,23 @@ void limit_switch_safety_poll(void)
 
         bool active = read_switch_triggered(sw);
         if (active) {
-            trigger_switch(sw);
+            sw->trigger_debounce_counter++;
+            if (sw->trigger_debounce_counter >= TRIGGER_DEBOUNCE_COUNT) {
+              sw->release_counter = 0;
+              trigger_switch(sw);
+            }
         } else {
-            /* Re-arm once the switch is released. */
-            sw->active_latched = false;
+            sw->trigger_debounce_counter = 0;
+            
+            if (sw->active_latched) {
+                /* Only unlatch if switch has been consistently inactive for some time */
+                sw->release_counter++;
+                if (sw->release_counter >= RELEASE_DEBOUNCE_COUNT) {
+                    sw->active_latched = false;
+                    sw->triggered_flag = false; /* Clear flag when physical switch releases */
+                    sw->release_counter = 0;
+                }
+            }
         }
     }
 }
