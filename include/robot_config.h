@@ -20,8 +20,8 @@
  * square a1 (file 0, rank 0).  Increase to push the origin further
  * away from the home switches.
  */
-#define ROBOT_CONFIG_BOARD_ORIGIN_X     0
-#define ROBOT_CONFIG_BOARD_ORIGIN_Y     0
+#define ROBOT_CONFIG_BOARD_ORIGIN_X     1250
+#define ROBOT_CONFIG_BOARD_ORIGIN_Y     500
 
 #define ROBOT_CONFIG_Z_TRAVEL           0
 
