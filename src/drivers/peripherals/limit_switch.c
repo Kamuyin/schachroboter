@@ -31,6 +31,7 @@ struct limit_switch {
     
     /* State */
     volatile bool triggered_flag;
+    volatile bool active_latched;
     bool interrupt_enabled;
     bool initialized;
 };
@@ -55,6 +56,13 @@ static void trigger_switch(struct limit_switch *sw)
     if (!sw || !sw->initialized) {
         return;
     }
+
+    /* Already latched active: do not retrigger callbacks/logs repeatedly. */
+    if (sw->active_latched) {
+        return;
+    }
+
+    sw->active_latched = true;
 
     sw->triggered_flag = true;
 
@@ -160,12 +168,19 @@ static int init_switch_from_dt(limit_switch_id_t id,
     sw->initialized = true;
 
     int initial_level = gpio_pin_get(sw->in_port, sw->in_pin);
+    bool initial_active = (initial_level >= 0) ? (sw->active_high ? (initial_level > 0) : (initial_level == 0)) : false;
+    sw->active_latched = initial_active;
+
     LOG_INF("Limit switch %d initialized (active_high=%d, OUT=%s:%u, IN=%s:%u, IN_level=%d)",
             id,
             active_high,
             sw->out_port->name, sw->out_pin,
             sw->in_port->name, sw->in_pin,
             initial_level);
+
+    if (initial_active) {
+        LOG_WRN("Limit switch %d is already active at boot (line high)", id);
+    }
     return 0;
 }
 
@@ -335,6 +350,7 @@ void limit_switch_clear_triggered(limit_switch_t *sw)
 {
     if (sw) {
         sw->triggered_flag = false;
+        sw->active_latched = false;
     }
 }
 
@@ -346,8 +362,12 @@ void limit_switch_safety_poll(void)
             continue;
         }
 
-        if (read_switch_triggered(sw)) {
+        bool active = read_switch_triggered(sw);
+        if (active) {
             trigger_switch(sw);
+        } else {
+            /* Re-arm once the switch is released. */
+            sw->active_latched = false;
         }
     }
 }
