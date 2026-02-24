@@ -197,7 +197,7 @@ int robot_controller_move_to(int32_t x, int32_t y, int32_t z, uint32_t speed_us)
 
 int robot_controller_home(void)
 {
-    /* Legacy function - just zeroes positions without using limit switches */
+    /* Legacy function - just zeroes positions */
     if (!motor_x || !motor_y1 || !motor_y2 || !motor_z) {
         return -EINVAL;
     }
@@ -214,7 +214,7 @@ int robot_controller_home(void)
 int robot_controller_home_axis(char axis)
 {
     ARG_UNUSED(axis);
-    LOG_WRN("Limit switches are disabled; axis homing is unavailable");
+    LOG_WRN("Axis homing is unavailable");
     return -ENOTSUP;
 }
 
@@ -245,12 +245,6 @@ bool robot_controller_is_homing(void)
     return (homing_state != HOMING_STATE_IDLE && 
             homing_state != HOMING_STATE_COMPLETE &&
             homing_state != HOMING_STATE_ERROR);
-}
-
-bool robot_controller_limit_switch_triggered(char axis)
-{
-    ARG_UNUSED(axis);
-    return false;
 }
 
 int robot_controller_gripper_open(void)
@@ -322,7 +316,7 @@ void robot_controller_update(void)
 {
     stepper_manager_update_all();
 
-    /* Limit-switch homing is disabled. */
+    /* Physical homing is disabled. */
     if (homing_state == HOMING_STATE_Z ||
         homing_state == HOMING_STATE_Y ||
         homing_state == HOMING_STATE_X) {

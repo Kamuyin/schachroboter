@@ -385,12 +385,12 @@ static void on_diag_stepper_home(const char *topic, const uint8_t *payload, uint
 }
 
 /* ============================================================================
- * Homing and limit switch diagnostics handlers
+ * Homing diagnostics handlers
  * ============================================================================ */
 
 static void on_diag_homing_start(const char *topic, const uint8_t *payload, uint32_t payload_len)
 {
-    /* Expected JSON: {"axis": "x"} or {"axis": "all"} - starts physical homing with limit switches */
+    /* Expected JSON: {"axis": "x"} or {"axis": "all"} */
     cJSON *root = cJSON_ParseWithLength((const char *)payload, payload_len);
     cJSON *axis_name = root ? cJSON_GetObjectItem(root, "axis") : NULL;
     int ret;
@@ -432,7 +432,7 @@ static void on_diag_homing_start(const char *topic, const uint8_t *payload, uint
 
 static void on_diag_homing_status(const char *topic, const uint8_t *payload, uint32_t payload_len)
 {
-    /* Returns current homing state and limit switch status */
+    /* Returns current homing state */
     cJSON *resp = cJSON_CreateObject();
     if (!resp) return;
 
@@ -453,13 +453,6 @@ static void on_diag_homing_status(const char *topic, const uint8_t *payload, uin
     }
     cJSON_AddStringToObject(resp, "homing_state", state_str);
     cJSON_AddBoolToObject(resp, "is_homing", robot_controller_is_homing());
-    
-    /* Limit switch status */
-    cJSON *limits = cJSON_CreateObject();
-    cJSON_AddBoolToObject(limits, "x_triggered", robot_controller_limit_switch_triggered('x'));
-    cJSON_AddBoolToObject(limits, "y_triggered", robot_controller_limit_switch_triggered('y'));
-    cJSON_AddBoolToObject(limits, "z_triggered", robot_controller_limit_switch_triggered('z'));
-    cJSON_AddItemToObject(resp, "limit_switches", limits);
 
     char *resp_payload = cJSON_PrintUnformatted(resp);
     if (resp_payload) {
@@ -568,7 +561,7 @@ int diagnostics_init(void)
     app_mqtt_subscribe("chess/diag/stepper/enable", on_diag_stepper_enable);
     app_mqtt_subscribe("chess/diag/stepper/home", on_diag_stepper_home);
 
-    /* Homing diagnostics (physical homing with limit switches) */
+    /* Homing diagnostics */
     app_mqtt_subscribe("chess/diag/homing/start", on_diag_homing_start);
     app_mqtt_subscribe("chess/diag/homing/status", on_diag_homing_status);
 

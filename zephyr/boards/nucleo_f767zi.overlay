@@ -75,32 +75,6 @@
         switch-active-high;
     };
 
-    /*
-     * Limit switches are intentionally disabled.
-     * Keep this block commented out until hardware is re-enabled.
-     */
-    /*
-    limit_switch_x: limit-switch-x {
-        compatible = "custom,limit-switch";
-        out-gpios = <&gpiod 4 GPIO_ACTIVE_HIGH>;
-        in-gpios  = <&gpioh 1 GPIO_ACTIVE_HIGH>;
-        active-high;
-    };
-
-    limit_switch_y: limit-switch-y {
-        compatible = "custom,limit-switch";
-        out-gpios = <&gpiod 5 GPIO_ACTIVE_HIGH>;
-        in-gpios  = <&gpioc 2 GPIO_ACTIVE_HIGH>;
-        active-high;
-    };
-
-    limit_switch_z: limit-switch-z {
-        compatible = "custom,limit-switch";
-        out-gpios = <&gpiod 6 GPIO_ACTIVE_HIGH>;
-        in-gpios  = <&gpioc 3 GPIO_ACTIVE_HIGH>;
-        active-high;
-    };
-    */
 };
 
 &pwm1 {

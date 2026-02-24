@@ -43,13 +43,13 @@ void stepper_motor_set_direction_inverted(stepper_motor_t *motor, bool inverted)
 
 /**
  * @brief Emergency stop - immediately halts motor, discards remaining steps
- * @note Safe to call from ISR context (limit switch interrupt)
+ * @note Safe to call from ISR context
  * @param motor Pointer to stepper motor
  */
 void stepper_motor_emergency_stop(stepper_motor_t *motor);
 
 /**
- * @brief Start homing movement (continuous move until limit switch triggers)
+ * @brief Start homing movement (continuous move until external stop condition)
  * @param motor Pointer to stepper motor
  * @param direction Direction to move (towards home position)
  * @param step_delay_us Speed in microseconds per step

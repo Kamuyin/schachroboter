@@ -38,11 +38,6 @@ void robot_controller_task(void);
 
 /**
  * @brief Start homing sequence for all axes (X, Y, Z)
- * 
- * This initiates an asynchronous homing sequence. Motors move towards
- * their respective limit switches. When a switch triggers, the motor
- * stops immediately and its position is set to 0.
- * 
  * @return 0 on success, negative errno on failure
  */
 int robot_controller_home_all(void);
@@ -65,13 +60,6 @@ homing_state_t robot_controller_get_homing_state(void);
  * @return true if homing in progress
  */
 bool robot_controller_is_homing(void);
-
-/**
- * @brief Check if a specific limit switch is triggered
- * @param axis 'x', 'y', or 'z'
- * @return true if triggered, false otherwise
- */
-bool robot_controller_limit_switch_triggered(char axis);
 
 /**
  * @brief Start X and Y axes moving simultaneously (non-blocking).
