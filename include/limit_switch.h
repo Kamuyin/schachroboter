@@ -103,4 +103,15 @@ bool limit_switch_was_triggered(const limit_switch_t *sw);
  */
 void limit_switch_clear_triggered(limit_switch_t *sw);
 
+/**
+ * @brief Safety polling fallback for limit switches.
+ *
+ * Reads all configured switch inputs and immediately triggers emergency-stop
+ * for attached motor(s) when a switch is active.
+ *
+ * This function is intended as a hard safety layer in case GPIO interrupts
+ * are not firing due to wiring/noise/driver issues.
+ */
+void limit_switch_safety_poll(void);
+
 #endif /* LIMIT_SWITCH_H */

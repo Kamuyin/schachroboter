@@ -41,6 +41,35 @@ static struct limit_switch switches[LIMIT_SWITCH_MAX];
 /* Forward declaration of ISR handler */
 static void limit_switch_isr(const struct device *port, struct gpio_callback *cb, uint32_t pins);
 
+static inline bool read_switch_triggered(const struct limit_switch *sw)
+{
+    int val = gpio_pin_get(sw->in_port, sw->in_pin);
+    if (val < 0) {
+        return false;
+    }
+    return sw->active_high ? (val > 0) : (val == 0);
+}
+
+static void trigger_switch(struct limit_switch *sw)
+{
+    if (!sw || !sw->initialized) {
+        return;
+    }
+
+    sw->triggered_flag = true;
+
+    /* Unconditional emergency stop on all attached motors */
+    for (int m = 0; m < sw->motor_count; m++) {
+        if (sw->motors[m]) {
+            stepper_motor_emergency_stop(sw->motors[m]);
+        }
+    }
+
+    if (sw->callback) {
+        sw->callback(sw, sw->user_data);
+    }
+}
+
 /* Device tree node check macros */
 #define LIMIT_SWITCH_X_NODE DT_NODELABEL(limit_switch_x)
 #define LIMIT_SWITCH_Y_NODE DT_NODELABEL(limit_switch_y)
@@ -129,8 +158,14 @@ static int init_switch_from_dt(limit_switch_id_t id,
     
     sw->interrupt_enabled = true;
     sw->initialized = true;
-    
-    LOG_INF("Limit switch %d initialized (active_high=%d)", id, active_high);
+
+    int initial_level = gpio_pin_get(sw->in_port, sw->in_pin);
+    LOG_INF("Limit switch %d initialized (active_high=%d, OUT=%s:%u, IN=%s:%u, IN_level=%d)",
+            id,
+            active_high,
+            sw->out_port->name, sw->out_pin,
+            sw->in_port->name, sw->in_pin,
+            initial_level);
     return 0;
 }
 
@@ -145,19 +180,7 @@ static void limit_switch_isr(const struct device *port, struct gpio_callback *cb
         }
         
         if (sw->in_port == port && (pins & BIT(sw->in_pin))) {
-            sw->triggered_flag = true;
-
-            /* Unconditional emergency stop */
-            for (int m = 0; m < sw->motor_count; m++) {
-                if (sw->motors[m]) {
-                    stepper_motor_emergency_stop(sw->motors[m]);
-                }
-            }
-
-            /* Invoke user callback if registered (must be ISR-safe) */
-            if (sw->callback) {
-                sw->callback(sw, sw->user_data);
-            }
+            trigger_switch(sw);
         }
     }
 }
@@ -241,9 +264,8 @@ bool limit_switch_is_triggered(const limit_switch_t *sw)
     if (!sw || !sw->initialized) {
         return false;
     }
-    
-    int val = gpio_pin_get(sw->in_port, sw->in_pin);
-    return sw->active_high ? (val > 0) : (val == 0);
+
+    return read_switch_triggered(sw);
 }
 
 int limit_switch_attach_motor(limit_switch_t *sw, stepper_motor_t *motor)
@@ -313,5 +335,19 @@ void limit_switch_clear_triggered(limit_switch_t *sw)
 {
     if (sw) {
         sw->triggered_flag = false;
+    }
+}
+
+void limit_switch_safety_poll(void)
+{
+    for (int i = 0; i < LIMIT_SWITCH_MAX; i++) {
+        struct limit_switch *sw = &switches[i];
+        if (!sw->initialized) {
+            continue;
+        }
+
+        if (read_switch_triggered(sw)) {
+            trigger_switch(sw);
+        }
     }
 }
