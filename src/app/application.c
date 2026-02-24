@@ -185,8 +185,133 @@ static void on_robot_command_received(const char *topic, const uint8_t *payload,
     } else if (strcmp(command, "gripper_close") == 0) {
         robot_controller_gripper_close();
         LOG_INF("Closing gripper");
+
+    } else if (strcmp(command, "chess_move") == 0) {
+        /*
+         * High-level chess move command.
+         *
+         * Expected JSON fields:
+         *   action   (string, required) – "move", "capture", "en_passant",
+         *                                  "castle", or "remove"
+         *   from     (string, required) – source square in UCI notation, e.g. "e2"
+         *   to       (string, optional) – destination square, e.g. "e4"
+         *                                 (not needed for "remove")
+         *   captured (string, optional) – en-passant captured pawn square
+         *   from2    (string, optional) – castle: king source square
+         *   to2      (string, optional) – castle: king destination square
+         */
+        cJSON *action_type_j = cJSON_GetObjectItem(root, "action");
+        cJSON *from_j        = cJSON_GetObjectItem(root, "from");
+        cJSON *to_j          = cJSON_GetObjectItem(root, "to");
+
+        if (!action_type_j || !cJSON_IsString(action_type_j) ||
+            !from_j        || !cJSON_IsString(from_j)) {
+            LOG_ERR("chess_move: missing required 'action' or 'from' field");
+            cJSON_Delete(root);
+            return;
+        }
+
+        planner_action_t action;
+        memset(&action, 0, sizeof(action));
+
+        /* Map action string to enum */
+        const char *atype = action_type_j->valuestring;
+        if (strcmp(atype, "move") == 0) {
+            action.type = PLANNER_ACTION_MOVE;
+        } else if (strcmp(atype, "capture") == 0) {
+            action.type = PLANNER_ACTION_CAPTURE;
+        } else if (strcmp(atype, "en_passant") == 0) {
+            action.type = PLANNER_ACTION_EN_PASSANT;
+        } else if (strcmp(atype, "castle") == 0) {
+            action.type = PLANNER_ACTION_CASTLE;
+        } else if (strcmp(atype, "remove") == 0) {
+            action.type = PLANNER_ACTION_REMOVE;
+        } else {
+            LOG_ERR("chess_move: unknown action type '%s'", atype);
+            cJSON_Delete(root);
+            return;
+        }
+
+        /* Parse primary from square */
+        if (movement_planner_parse_square(from_j->valuestring, &action.from) != 0) {
+            LOG_ERR("chess_move: invalid 'from' square '%s'", from_j->valuestring);
+            cJSON_Delete(root);
+            return;
+        }
+
+        /* Parse primary to square (optional for REMOVE) */
+        if (to_j && cJSON_IsString(to_j)) {
+            if (movement_planner_parse_square(to_j->valuestring, &action.to) != 0) {
+                LOG_ERR("chess_move: invalid 'to' square '%s'", to_j->valuestring);
+                cJSON_Delete(root);
+                return;
+            }
+        }
+
+        /* Parse optional en-passant captured pawn square */
+        cJSON *captured_j = cJSON_GetObjectItem(root, "captured");
+        if (captured_j && cJSON_IsString(captured_j)) {
+            movement_planner_parse_square(captured_j->valuestring, &action.captured);
+        }
+
+        /* Parse optional castle king squares */
+        cJSON *from2_j = cJSON_GetObjectItem(root, "from2");
+        cJSON *to2_j   = cJSON_GetObjectItem(root, "to2");
+        if (from2_j && cJSON_IsString(from2_j) &&
+            to2_j   && cJSON_IsString(to2_j)) {
+            movement_planner_parse_square(from2_j->valuestring, &action.from2);
+            movement_planner_parse_square(to2_j->valuestring,   &action.to2);
+        }
+
+        int ret = robot_controller_enqueue_action(&action);
+        if (ret < 0) {
+            LOG_ERR("chess_move: action queue full (ret=%d)", ret);
+        } else {
+            LOG_INF("chess_move queued: %s %s -> %s",
+                    atype,
+                    from_j->valuestring,
+                    (to_j && cJSON_IsString(to_j)) ? to_j->valuestring : "graveyard");
+        }
     }
 
+    cJSON_Delete(root);
+}
+
+/*
+ * Completion callback – called from robot_controller_task when a planned
+ * action finishes.  Publishes a status message on chess/robot/status.
+ */
+static void on_action_complete(planner_result_t result,
+                               const planner_action_t *action)
+{
+    cJSON *root = cJSON_CreateObject();
+    if (!root) {
+        return;
+    }
+
+    cJSON_AddStringToObject(root, "type",   "action_complete");
+    cJSON_AddStringToObject(root, "status", result == PLANNER_OK ? "ok" : "error");
+    cJSON_AddNumberToObject(root, "result", (int)result);
+
+    if (action) {
+        /* Encode the completed action in UCI notation */
+        char from_str[3] = {'a' + action->from.file, '1' + action->from.rank, '\0'};
+        char to_str[3]   = {'a' + action->to.file,   '1' + action->to.rank,   '\0'};
+        cJSON_AddStringToObject(root, "from",        from_str);
+        cJSON_AddStringToObject(root, "to",          to_str);
+        cJSON_AddNumberToObject(root, "action_type", (int)action->type);
+    }
+
+    cJSON_AddNumberToObject(root, "timestamp", k_uptime_get_32());
+
+    char *payload = cJSON_PrintUnformatted(root);
+    if (payload) {
+        int rc = app_mqtt_publish("chess/robot/status", payload, strlen(payload));
+        if (rc < 0) {
+            LOG_WRN("Failed to publish action_complete status (rc=%d)", rc);
+        }
+        cJSON_free(payload);
+    }
     cJSON_Delete(root);
 }
 
@@ -207,6 +332,8 @@ int application_init(void)
 
     app_mqtt_subscribe("chess/system/ping", on_ping_received);
     app_mqtt_subscribe("chess/robot/command", on_robot_command_received);
+
+    robot_controller_set_action_complete_cb(on_action_complete);
 
     ret = diagnostics_init();
     if (ret < 0) {

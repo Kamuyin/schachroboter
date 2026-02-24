@@ -9,6 +9,8 @@
 #include "servo_manager.h"
 #include "servo_config.h"
 #include "limit_switch.h"
+#include "movement_planner.h"
+#include "robot_config.h"
 
 LOG_MODULE_REGISTER(robot_controller, LOG_LEVEL_INF);
 
@@ -35,6 +37,12 @@ static limit_switch_t *limit_z = NULL;
 
 /* Homing state */
 static volatile homing_state_t homing_state = HOMING_STATE_IDLE;
+
+K_MSGQ_DEFINE(action_queue, sizeof(planner_action_t), 4,
+              _Alignof(planner_action_t));
+
+static volatile bool planner_active = false;
+static robot_action_complete_cb_t action_complete_cb = NULL;
 
 /* Limit switch callbacks - called from ISR context */
 static void on_limit_x_triggered(limit_switch_t *sw, void *user_data)
@@ -202,6 +210,8 @@ int robot_controller_init(void)
     
     servo_manager_register_servo(SERVO_ID_1, gripper_servo);
     
+    movement_planner_init();
+
     LOG_INF("Robot controller initialized");
     return 0;
 }
@@ -412,7 +422,8 @@ int robot_controller_servo_enable(uint8_t servo_id, bool enable)
 
 bool robot_controller_is_busy(void)
 {
-    return !stepper_manager_all_idle();
+    /* Busy while a planner action is executing OR any motor is still moving */
+    return planner_active || !stepper_manager_all_idle();
 }
 
 robot_position_t robot_controller_get_position(void)
@@ -465,9 +476,104 @@ void robot_controller_update(void)
     }
 }
 
+int robot_controller_start_xy_move(int32_t x_abs, int32_t y_abs, uint32_t speed_us)
+{
+    if (!motor_x || !motor_y1 || !motor_y2) {
+        return -EINVAL;
+    }
+
+    int32_t steps_x = x_abs - stepper_motor_get_position(motor_x);
+    int32_t steps_y = y_abs - stepper_motor_get_position(motor_y1);
+    int ret;
+
+    /*
+     * Start X and Y in separate (non-blocking) calls before the first
+     * stepper_manager_update_all() tick, so both axes step concurrently
+     * from the very first update cycle.
+     */
+    if (steps_x != 0) {
+        ret = stepper_motor_move_steps(motor_x, steps_x, speed_us);
+        if (ret < 0) {
+            return ret;
+        }
+    }
+    if (steps_y != 0) {
+        ret = stepper_motor_move_steps_sync(motor_y1, motor_y2, steps_y, speed_us);
+        if (ret < 0) {
+            return ret;
+        }
+    }
+
+    return 0;
+}
+
+int robot_controller_start_z_move(int32_t z_abs, uint32_t speed_us)
+{
+    if (!motor_z) {
+        return -EINVAL;
+    }
+
+    int32_t steps_z = z_abs - stepper_motor_get_position(motor_z);
+    if (steps_z == 0) {
+        return 0;
+    }
+
+    return stepper_motor_move_steps(motor_z, steps_z, speed_us);
+}
+
+bool robot_controller_is_xy_moving(void)
+{
+    return stepper_motor_is_moving(motor_x)  ||
+           stepper_motor_is_moving(motor_y1) ||
+           stepper_motor_is_moving(motor_y2);
+}
+
+bool robot_controller_is_z_moving(void)
+{
+    return stepper_motor_is_moving(motor_z);
+}
+
+int robot_controller_enqueue_action(const planner_action_t *action)
+{
+    if (!action) {
+        return -EINVAL;
+    }
+
+    int ret = k_msgq_put(&action_queue, action, K_NO_WAIT);
+    if (ret < 0) {
+        LOG_WRN("Action queue full – action dropped (ret=%d)", ret);
+    }
+    return ret;
+}
+
+void robot_controller_set_action_complete_cb(robot_action_complete_cb_t cb)
+{
+    action_complete_cb = cb;
+}
+
 void robot_controller_task(void)
 {
+    planner_action_t pending;
+
     while (1) {
+        /*
+         * Dequeue and execute the next planned action when the robot is
+         * idle and no homing sequence is running.  movement_planner_execute()
+         * blocks internally, driving the stepper update loop itself until
+         * the action sequence is fully complete.
+         */
+        if (!robot_controller_is_homing() &&
+            k_msgq_get(&action_queue, &pending, K_NO_WAIT) == 0) {
+
+            planner_active = true;
+            planner_result_t result = movement_planner_execute(&pending);
+            planner_active = false;
+
+            if (action_complete_cb) {
+                action_complete_cb(result, &pending);
+            }
+        }
+
         robot_controller_update();
         k_sleep(K_USEC(100));
     }

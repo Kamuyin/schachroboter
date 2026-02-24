@@ -85,22 +85,22 @@
      */
     limit_switch_x: limit-switch-x {
         compatible = "custom,limit-switch";
-        out-gpios = <&gpioe 13 GPIO_ACTIVE_HIGH>;  /* PE13 - power/signal out */
-        in-gpios = <&gpiof 13 GPIO_ACTIVE_HIGH>;   /* PF13 - read input */
-        active-high;  /* Triggered when IN reads HIGH */
+        out-gpios = <&gpiod 4 GPIO_ACTIVE_HIGH>;
+        in-gpios  = <&gpioh 1 GPIO_ACTIVE_HIGH>;
+        active-high;
     };
 
     limit_switch_y: limit-switch-y {
         compatible = "custom,limit-switch";
-        out-gpios = <&gpioe 14 GPIO_ACTIVE_HIGH>;  /* PE14 - power/signal out */
-        in-gpios = <&gpioe 15 GPIO_ACTIVE_HIGH>;   /* PE15 - read input (single switch for Y1 & Y2) */
+        out-gpios = <&gpiod 5 GPIO_ACTIVE_HIGH>;
+        in-gpios  = <&gpioc 2 GPIO_ACTIVE_HIGH>;
         active-high;
     };
 
     limit_switch_z: limit-switch-z {
         compatible = "custom,limit-switch";
-        out-gpios = <&gpiof 12 GPIO_ACTIVE_HIGH>;  /* PF12 - power/signal out */
-        in-gpios = <&gpiog 14 GPIO_ACTIVE_HIGH>;   /* PG14 - read input */
+        out-gpios = <&gpiod 6 GPIO_ACTIVE_HIGH>;
+        in-gpios  = <&gpioc 3 GPIO_ACTIVE_HIGH>;
         active-high;
     };
 };

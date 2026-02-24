@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "movement_planner.h"
 
 typedef struct
 {
@@ -71,5 +72,66 @@ bool robot_controller_is_homing(void);
  * @return true if triggered, false otherwise
  */
 bool robot_controller_limit_switch_triggered(char axis);
+
+/**
+ * @brief Start X and Y axes moving simultaneously (non-blocking).
+ *
+ * Both motors are armed in a single call so they begin stepping in the
+ * same update tick, providing true concurrent XY motion.
+ *
+ * @param x_abs   Target X position in steps (absolute).
+ * @param y_abs   Target Y position in steps (absolute).
+ * @param speed_us Step delay in microseconds.
+ * @return 0 on success, negative errno on failure.
+ */
+int robot_controller_start_xy_move(int32_t x_abs, int32_t y_abs, uint32_t speed_us);
+
+/**
+ * @brief Start moving the Z axis to an absolute step position (non-blocking).
+ *
+ * @param z_abs   Target Z position in steps (absolute).
+ * @param speed_us Step delay in microseconds.
+ * @return 0 on success, negative errno on failure.
+ */
+int robot_controller_start_z_move(int32_t z_abs, uint32_t speed_us);
+
+/**
+ * @brief Return true while the X or Y axis is still moving.
+ */
+bool robot_controller_is_xy_moving(void);
+
+/**
+ * @brief Return true while the Z axis is still moving.
+ */
+bool robot_controller_is_z_moving(void);
+
+/* ---------------------------------------------------------------------------
+ * Action queue
+ * ------------------------------------------------------------------------ */
+
+/**
+ * @brief Callback invoked by robot_controller_task when an action finishes.
+ *
+ * @param result  Outcome of the completed action.
+ * @param action  Pointer to the action that was executed.
+ */
+typedef void (*robot_action_complete_cb_t)(planner_result_t result,
+                                           const planner_action_t *action);
+
+/**
+ * @brief Register a callback to be called when a planned action completes.
+ */
+void robot_controller_set_action_complete_cb(robot_action_complete_cb_t cb);
+
+/**
+ * @brief Enqueue a chess action for execution by robot_controller_task.
+ *
+ * The action is placed in an internal ring buffer (capacity 4). When the
+ * robot is idle (and not homing), the task dequeues and executes it.
+ *
+ * @param action  Fully populated planner_action_t.
+ * @return 0 on success, -ENOMSG if the queue is full.
+ */
+int robot_controller_enqueue_action(const planner_action_t *action);
 
 #endif

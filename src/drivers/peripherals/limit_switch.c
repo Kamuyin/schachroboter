@@ -145,24 +145,18 @@ static void limit_switch_isr(const struct device *port, struct gpio_callback *cb
         }
         
         if (sw->in_port == port && (pins & BIT(sw->in_pin))) {
-            /* Check if the switch is actually triggered (debounce check) */
-            int val = gpio_pin_get(sw->in_port, sw->in_pin);
-            bool triggered = sw->active_high ? (val > 0) : (val == 0);
-            
-            if (triggered) {
-                sw->triggered_flag = true;
-                
-                /* Emergency stop all attached motors immediately */
-                for (int m = 0; m < sw->motor_count; m++) {
-                    if (sw->motors[m]) {
-                        stepper_motor_emergency_stop(sw->motors[m]);
-                    }
+            sw->triggered_flag = true;
+
+            /* Unconditional emergency stop */
+            for (int m = 0; m < sw->motor_count; m++) {
+                if (sw->motors[m]) {
+                    stepper_motor_emergency_stop(sw->motors[m]);
                 }
-                
-                /* Invoke user callback if registered */
-                if (sw->callback) {
-                    sw->callback(sw, sw->user_data);
-                }
+            }
+
+            /* Invoke user callback if registered (must be ISR-safe) */
+            if (sw->callback) {
+                sw->callback(sw, sw->user_data);
             }
         }
     }
