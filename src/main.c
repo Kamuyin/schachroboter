@@ -88,6 +88,12 @@ int main(void)
                     THREAD_PRIORITY, 0, K_NO_WAIT);
 
     LOG_INF("System is ready");
+    LOG_INF("ENTERING LIMIT SWITCH DEBUG MODE - OTHER TASKS MAY BE BLOCKED");
+    
+    while (1) {
+        limit_switch_debug_log_state();
+        k_sleep(K_MSEC(1000));
+    }
 
     return 0;
 }
